@@ -1,0 +1,10 @@
+# Tratar los finales de línea de forma automática, basado en el contenido del archivo.
+* text=auto
+
+# Forzar explícitamente que estos archivos de texto usen finales de línea LF.
+*.js      text eol=lf
+*.json    text eol=lf
+*.yml     text eol=lf
+*.md      text eol=lf
+*.gitignore text eol=lf
+Dockerfile  text eol=lf

@@ -12,8 +12,11 @@ const productSchema = new mongoose.Schema({
     material: String,
     gem: String,
     description: String,
-    imageUrl: String
+    imageUrl: String,
+    price: Number
 });
+// Añadimos el índice de texto aquí también para que se cree al ejecutar el script
+productSchema.index({ name: 'text', description: 'text', category: 'text', material: 'text', gem: 'text' });
 
 const Product = mongoose.model('Product', productSchema);
 
@@ -24,7 +27,8 @@ const sampleProducts = [
         material: "Oro Blanco 18k",
         gem: "Diamante redondo de 0.75ct, certificación GIA",
         description: "Un diseño atemporal que simboliza el amor eterno. El diamante central se eleva con elegancia para capturar la máxima luz.",
-        imageUrl: "https://i.imgur.com/TuVo1iX.jpeg" // URL de ejemplo
+        imageUrl: "https://i.imgur.com/TuVo1iX.jpeg", // URL de ejemplo
+        price: 2500
     },
     {
         name: "Aro de Matrimonio Eternity",
@@ -32,7 +36,8 @@ const sampleProducts = [
         material: "Platino",
         gem: "Banda completa de diamantes pequeños (1.5ct total)",
         description: "Una banda deslumbrante que representa un amor sin fin, con diamantes que rodean todo el aro.",
-        imageUrl: "https://i.imgur.com/Sna42aU.jpeg" // URL de ejemplo
+        imageUrl: "https://i.imgur.com/Sna42aU.jpeg", // URL de ejemplo
+        price: 3200
     },
     {
         name: "Anillo de Zafiro y Diamantes",
@@ -40,7 +45,8 @@ const sampleProducts = [
         material: "Oro Amarillo 18k",
         gem: "Zafiro azul ovalado de 1.2ct rodeado por un halo de diamantes",
         description: "Una pieza majestuosa que combina el intenso azul del zafiro con el brillo de los diamantes, ideal para una propuesta inolvidable.",
-        imageUrl: "https://i.imgur.com/b9o2wJ4.jpeg" // URL de ejemplo
+        imageUrl: "https://i.imgur.com/b9o2wJ4.jpeg", // URL de ejemplo
+        price: 1850
     }
 ];
 

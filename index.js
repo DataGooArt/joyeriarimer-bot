@@ -25,11 +25,13 @@ app.use(express.json()); // Middleware para que Express entienda JSON
 
 // Inicializa Gemini
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
 // --- MODELO DE BASE DE DATOS (MONGOOSE) ---
 const conversationSchema = new mongoose.Schema({
     phoneNumber: String, // El número de WhatsApp del cliente
+    firstName: String,
+    lastName: String,
     history: [
         {
             user: String,
@@ -41,6 +43,21 @@ const conversationSchema = new mongoose.Schema({
 });
 
 const Conversation = mongoose.model('Conversation', conversationSchema);
+
+// --- MODELO DE PRODUCTOS ---
+const productSchema = new mongoose.Schema({
+    name: String, // ej: "Anillo Solitario Clásico"
+    category: String, // ej: "compromiso", "matrimonio"
+    material: String, // ej: "Oro Blanco 18k"
+    gem: String, // ej: "Diamante 0.5ct"
+    description: String,
+    imageUrl: String, // URL pública de la imagen del producto
+    price: Number // ej: 1500 (en USD o la moneda que prefieras)
+});
+// Creamos un índice de texto para poder buscar en estos campos
+productSchema.index({ name: 'text', description: 'text', category: 'text', material: 'text', gem: 'text' });
+
+const Product = mongoose.model('Product', productSchema);
 
 // --- RUTAS DEL SERVIDOR (WEBHOOKS) ---
 
@@ -125,39 +142,41 @@ async function handleSmartReply(to, userQuery) {
         .join('\n');
 
     try {
-        // --- INYECCIÓN DE CONOCIMIENTO (RAG Básico) ---
-        let productInfo = "";
-        // Si la intención parece ser sobre productos, buscamos en la BD
-        if (userQuery.toLowerCase().includes('anillo') || userQuery.toLowerCase().includes('aro')) {
-            const products = await Product.find({ $text: { $search: userQuery } }).limit(2);
-            if (products.length > 0) {
-                productInfo = "Basado en tu pregunta, he encontrado estos productos en nuestro catálogo:\n" + products.map(p => `- Nombre: ${p.name}, Material: ${p.material}, Gema: ${p.gem}, Descripción: ${p.description}`).join('\n');
-            }
-        }
-
         // Prompt mejorado para que Gemini devuelva una estructura JSON
-        const prompt = `
-            Eres un asistente virtual experto de "Joyería Rimer", una prestigiosa joyería especialista en anillos de compromiso y matrimonio.
-            Analiza la "Pregunta Actual del Cliente" basándote en el "Historial de Conversación".
-            Tu tarea es generar una respuesta en formato JSON con dos campos: "intent" y "response".
+        const prompt = `Tu rol es ser un asistente virtual experto para "Joyería Rimer". Tu objetivo es mantener una conversación natural y útil.
 
-            Posibles intenciones ("intent"):
-            - "greeting": El cliente está saludando.
-            - "product_inquiry": El cliente pregunta sobre productos, materiales, precios, etc.
-            - "show_image": El cliente pide ver una foto de un producto específico (ej: "muéstrame un anillo solitario").
-            - "human_handover": El cliente pide explícitamente hablar con una persona, un asesor o un humano.
-            - "off_topic": La pregunta no tiene relación con la joyería.
-            - "general_question": Cualquier otra pregunta relacionada con la joyería (horarios, ubicación, etc.).
+            DATOS DEL CLIENTE CONOCIDOS:
+            - Nombre: ${conversation.firstName || 'Desconocido'}
 
-            Historial de Conversación:
+            HISTORIAL DE CONVERSACIÓN:
             ${historyForPrompt}
 
-            Información Relevante de Nuestro Catálogo (si aplica):
-            ${productInfo}
+            PREGUNTA ACTUAL DEL CLIENTE: "${userQuery}"
 
-            Pregunta Actual del Cliente: "${userQuery}"
+            INSTRUCCIONES:
+            1.  Analiza la pregunta actual del cliente en el contexto del historial.
+            2.  **PRIORIDAD 1 (Obtener Nombre):** Si el nombre del cliente es "Desconocido", tu intención DEBE SER "collect_name".
+            3.  **PRIORIDAD 2 (Ser Proactivo):** Si el cliente hace una pregunta vaga sobre productos (ej: "un anillo sencillo", "cotízame algo bonito"), tu intención DEBE SER "list_products".
+            4.  **IMPORTANTE:** Si la intención es "list_products" o "product_inquiry", tu "response" debe ser un texto MUY CORTO y amigable que invite a ver la lista, como "¡Claro! Aquí tienes algunas opciones que te pueden interesar:". NO pidas más detalles.
+            5.  **PRIORIDAD 3 (Detectar Intención):** Si ya conoces el nombre y la pregunta es específica, determina la intención de su consulta.
+            6.  **PRIORIDAD 4 (Extraer Datos):** Si el cliente proporciona su nombre en el mensaje, extráelo en los campos correspondientes del JSON.
+            7.  Tu respuesta final DEBE ser un objeto JSON válido con la siguiente estructura, y nada más:
+                {
+                  "intent": "...",
+                  "response": "...",
+                  "firstName": "...", // (Opcional, solo si se extrae del mensaje)
+                  "lastName": "..." // (Opcional, solo si se extrae del mensaje)
+                }
 
-            Genera solo el objeto JSON, sin texto adicional.
+            Posibles intenciones ("intent"):
+            - "collect_name": El bot necesita preguntar el nombre del cliente.
+            - "greeting": El cliente solo está saludando.
+            - "product_inquiry": El cliente pregunta sobre un producto específico, sus materiales, precios, etc.
+            - "show_image": El cliente pide ver una foto de un producto específico.
+            - "list_products": El cliente hace una pregunta general para ver un tipo de producto.
+            - "human_handover": El cliente pide explícitamente hablar con una persona.
+            - "off_topic": La pregunta no tiene relación con la joyería.
+            - "general_question": Cualquier otra pregunta relacionada con la joyería.
         `;
 
         const result = await model.generateContent(prompt);
@@ -168,6 +187,14 @@ async function handleSmartReply(to, userQuery) {
 
         console.log(`🤖 Intención detectada: ${aiResponse.intent}`);
         console.log(`🤖 Respuesta generada: "${aiResponse.response}"`);
+
+        // Si Gemini extrajo un nombre, lo guardamos en la base de datos.
+        if (aiResponse.firstName) {
+            conversation.firstName = aiResponse.firstName;
+        }
+        if (aiResponse.lastName) {
+            conversation.lastName = aiResponse.lastName;
+        }
 
         // Guarda el nuevo intercambio en la base de datos
         conversation.history.push({ user: userQuery, assistant: aiResponse.response });
@@ -192,8 +219,23 @@ async function handleSmartReply(to, userQuery) {
                 }
                 break;
             case 'list_products':
+            case 'product_inquiry':
                 // Buscamos productos en la base de datos para mostrarlos en la lista
-                const productsToList = await Product.find({ category: /compromiso/i }).limit(10); // Busca hasta 10 anillos de compromiso
+                let productsToList = [];
+                if (userQuery.length > 3) { // Solo buscar si la consulta tiene algo de sustancia
+                    productsToList = await Product.find(
+                        { $text: { $search: userQuery } },
+                        { score: { $meta: "textScore" } }
+                    ).sort({ score: { $meta: "textScore" } }).limit(3);
+                }
+
+                // Si la búsqueda no arroja resultados, intenta una búsqueda más amplia usando el historial
+                if (productsToList.length === 0) {
+                    console.log('⚠️ Búsqueda sin resultados, intentando búsqueda contextual con historial.');
+                    const contextKeywords = historyForPrompt.match(/compromiso|matrimonio|solitario|zafiro/gi)?.join(' ') || 'anillo';
+                    productsToList = await Product.find({ $text: { $search: contextKeywords } }).limit(3);
+                }
+
                 await sendProductListMessage(to, productsToList, aiResponse.response, "Ver Anillos");
                 break;
             default:
@@ -237,6 +279,47 @@ async function sendImageMessage(to, imageUrl, caption) {
         image: {
             link: imageUrl,
             caption: caption
+        }
+    };
+    await sendMessageAPI(data);
+}
+
+/**
+ * Envía un mensaje de lista interactiva con productos.
+ * @param {string} to - El número de teléfono del destinatario.
+ * @param {Array} products - Un array de objetos de producto de la base de datos.
+ * @param {string} bodyText - El texto principal del mensaje.
+ * @param {string} buttonText - El texto del botón para abrir la lista.
+ */
+async function sendProductListMessage(to, products, bodyText, buttonText) {
+    if (!products || products.length === 0) {
+        console.log("No hay productos para enviar en la lista.");
+        return;
+    }
+
+    const rows = products.map(product => ({
+        id: `product_${product._id}`, // Un ID único para cada opción
+        title: product.name.substring(0, 24), // Título de la fila (máx 24 caracteres)
+        description: `${product.material} - $${product.price}`.substring(0, 72) // Descripción (máx 72 caracteres)
+    }));
+
+    const data = {
+        messaging_product: 'whatsapp',
+        to: to,
+        type: 'interactive',
+        interactive: {
+            type: 'list',
+            header: {
+                type: 'text',
+                text: 'Nuestro Catálogo'
+            },
+            body: {
+                text: bodyText
+            },
+            action: {
+                button: buttonText,
+                sections: [{ title: 'Anillos Disponibles', rows: rows }]
+            }
         }
     };
     await sendMessageAPI(data);
@@ -357,3 +440,16 @@ async function startServer() {
 }
 
 startServer();
+
+// --- EXPORTACIONES PARA PRUEBAS ---
+// Exportamos solo si no estamos en el módulo principal (para evitar errores en producción)
+if (require.main !== module) {
+    module.exports = {
+        handleSmartReply,
+        Conversation,
+        Product,
+        sendTextMessage,
+        sendImageMessage,
+        sendProductListMessage
+    };
+}
