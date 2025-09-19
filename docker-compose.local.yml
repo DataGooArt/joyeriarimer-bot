@@ -1,0 +1,11 @@
+services:
+  joyeria-rimer-bot:
+    build: . # Construye la imagen localmente usando el Dockerfile
+    container_name: joyeria-rimer-bot-local
+    restart: unless-stopped
+    env_file:
+      - .env # Carga las variables de entorno desde el archivo .env
+    ports:
+      - "1337:1337" # Expone el puerto de la aplicación a tu máquina local
+
+networks: {} # No necesita redes externas para la prueba local
