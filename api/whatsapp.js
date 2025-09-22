@@ -435,6 +435,13 @@ async function sendProductDetail(to, productId) {
                         {
                             type: 'reply',
                             reply: {
+                                id: 'agendar_cita',
+                                title: '📅 Agendar Cita'
+                            }
+                        },
+                        {
+                            type: 'reply',
+                            reply: {
                                 id: 'ver_mas_productos',
                                 title: '👀 Ver Más'
                             }

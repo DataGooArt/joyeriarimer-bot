@@ -108,6 +108,14 @@ async function processWebhook(body) {
                 else if (['cotizar_producto', 'agendar_cita', 'ver_mas_productos'].includes(buttonId)) {
                     await handleProductAction(from, buttonId);
                 }
+                // Manejar botón de iniciar flow de citas
+                else if (buttonId === 'start_appointment_flow') {
+                    const FlowService = require('../services/flowService');
+                    const appointmentFlow = await FlowService.sendAppointmentFlow(from);
+                    
+                    const { sendWhatsAppMessage } = require('../services/whatsappService');
+                    await sendWhatsAppMessage(from, appointmentFlow);
+                }
                 else {
                     // Manejar otros botones con IA
                     await handleSmartReply(from, `Presionó el botón: ${buttonTitle}`);

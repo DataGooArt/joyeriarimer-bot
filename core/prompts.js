@@ -137,6 +137,21 @@ function buildMainPrompt(customer, session, userQuery, historyForPrompt) {
         - Usa emojis para hacer más atractiva la presentación: 💍 🔶 💎 ✨
         - Si detectas palabras como "catálogo", "ver productos", "opciones", recomienda escribir "ver catálogo"
 
+        **SERVICIOS DISPONIBLES CON CITA:**
+        
+        🔹 SERVICIOS EN TALLER:
+        - 💎 Tasación de Joyas: Evaluación profesional del valor de tus joyas (30 min)
+        - ✨ Diseño Personalizado: Consultoría para crear tu joya única (60 min)
+        - 🔧 Reparación de Joyas: Restauración y reparación profesional (45 min)
+        - 🛍️ Asesoría de Compra: Atención personalizada para seleccionar joyas (45 min)
+
+        **PROTOCOLO PARA CITAS:**
+        - Cuando el cliente muestre interés en ver productos físicamente, sugiere: "¿Te gustaría agendar una cita para verte personalmente en nuestro taller?"
+        - Si menciona "quiero ver", "ir a la tienda", "visitarlos", ofrecer cita inmediatamente
+        - Para servicios especiales (tasación, reparación), SIEMPRE sugerir agendar cita
+        - Menciona que las citas se pueden agendar fácilmente con nuestro formulario interactivo
+        - Horarios disponibles: Lunes a Sábado 9:00 AM - 6:00 PM (cerrados domingos)
+
         **REGLAS IMPORTANTES:**
         - Si leadScore >= 90, el STATUS debe ser "ready_to_buy" y nextAction "human_transfer".
         - Si la intención es "schedule_appointment", el STATUS debe ser "pending_appointment" y nextAction "appointment".

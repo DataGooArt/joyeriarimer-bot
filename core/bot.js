@@ -1,124 +1,19 @@
 'use strict';
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const mongoose = require('mongoose');
 const whatsapp = require('../api/whatsapp.js');
 const { buildMainPrompt } = require('./prompts');
+const { generateAIResponse } = require('../services/aiService');
+const { connectDB } = require('../services/dbService');
 
-// --- CONFIGURACIÓN E INICIALIZACIÓN DEL LLM ---
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+// Importar modelos
+const Customer = require('../models/Customer');
+const ChatSession = require('../models/ChatSession');
+const MessageLog = require('../models/MessageLog');
+const Product = require('../models/Product');
+const Order = require('../models/Order');
+const Appointment = require('../models/Appointment');
 
-// --- MODELOS DE DATOS (SCHEMAS) ---
-
-const attributeSchema = new mongoose.Schema({
-  name: { type: String, required: true }, // e.g. "Metal", "Talla", "Gema"
-  value: { type: String, required: true }
-}, { _id: false });
-
-const productSchema = new mongoose.Schema({
-  name: { type: String, required: true, trim: true },
-  category: { type: String, index: true, lowercase: true },
-  material: String,
-  gem: String,
-  description: String,
-  imageUrl: String,
-  sku: { type: String, unique: true, sparse: true, index: true },
-  minPrice: { type: Number, required: true, min: 0 },
-  maxPrice: { type: Number, min: 0 },
-  stock: { type: Number, default: 0, min: 0, index: true },
-  tags: [{ type: String, lowercase: true, index: true }],
-  isAvailable: { type: Boolean, default: true, index: true },
-  isArtisanal: { type: Boolean, default: true },
-  size: String,
-  attributes: [attributeSchema], // atributos dinámicos
-  parentProduct: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', default: null, index: true },
-  metadata: { type: mongoose.Schema.Types.Mixed }, // info adicional (peso, certificado, origen)
-}, { timestamps: true });
-
-productSchema.index({
-  name: 'text', description: 'text', category: 'text', material: 'text', gem: 'text', tags: 'text'
-}, { name: 'ProductTextIndex', default_language: 'spanish' });
-
-const Product = mongoose.model('Product', productSchema);
-
-const customerSchema = new mongoose.Schema({
-  name: String,
-  phone: { type: String, required: true, unique: true, index: true },
-  email: { type: String, lowercase: true, index: true },
-  whatsappOptIn: { type: Boolean, default: true },
-  language: { type: String, default: 'es' },
-  leadScore: { type: Number, default: 0 },
-  priority: { type: String, default: 'low' },
-  tags: [String],
-  termsAcceptedAt: { type: Date, default: null }, // ← AGREGAR ESTA LÍNEA
-  metadata: mongoose.Schema.Types.Mixed
-}, { timestamps: true });
-
-const Customer = mongoose.model('Customer', customerSchema);
-
-const chatSessionSchema = new mongoose.Schema({
-  customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', index: true },
-  phone: { type: String, index: true },
-  status: { type: String, default: 'open', enum: ['open', 'closed', 'pending_human'] }, // open, closed
-  context: { type: mongoose.Schema.Types.Mixed, default: {} }, // ← Agregar default: {}
-  openedAt: { type: Date, default: Date.now },
-  closedAt: Date
-}, { timestamps: true });
-
-chatSessionSchema.index({ openedAt: 1 });
-const ChatSession = mongoose.model('ChatSession', chatSessionSchema);
-
-const messageLogSchema = new mongoose.Schema({
-  session: { type: mongoose.Schema.Types.ObjectId, ref: 'ChatSession', index: true },
-  direction: { type: String, enum: ['inbound','outbound'], required: true },
-  whatsappMessageId: { type: String, unique: true, sparse: true }, // prevenir duplicados
-  text: String,
-  payload: mongoose.Schema.Types.Mixed, // botones, templates, media metadata
-  provider: { type: String, default: 'meta' },
-  createdAt: { type: Date, default: Date.now }
-}, { timestamps: false });
-
-// TTL index opcional para logs efímeros (ej: 90 días = 90*24*60*60)
-messageLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 90 * 24 * 60 * 60 });
-const MessageLog = mongoose.model('MessageLog', messageLogSchema);
-
-const orderSchema = new mongoose.Schema({
-  customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', index: true },
-  items: [{
-    product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
-    sku: String,
-    qty: Number,
-    unitPrice: Number
-  }],
-  total: Number,
-  status: { type: String, enum: ['pending','paid','shipped','cancelled','returned'], default: 'pending' },
-  payment: mongoose.Schema.Types.Mixed,
-  createdAt: { type: Date, default: Date.now }
-}, { timestamps: true });
-const Order = mongoose.model('Order', orderSchema);
-
-const appointmentSchema = new mongoose.Schema({
-    customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
-    conversation: { type: mongoose.Schema.Types.ObjectId, ref: 'ChatSession' },
-    dateTime: { type: Date, required: true },
-  status: { type: String, default: 'pending', enum: ['pending', 'confirmed', 'cancelled', 'completed'] },
-    notes: String // Ej. "Viene a ver anillos de compromiso"
-}, { timestamps: true });
-const Appointment = mongoose.model('Appointment', appointmentSchema);
-
-/**
- * Genera una respuesta estructurada en JSON a partir de un prompt.
- * @param {string} prompt - El prompt completo a enviar al modelo de lenguaje.
- * @returns {Promise<object>} El objeto JSON parseado de la respuesta del modelo.
- */
-async function generateJsonResponse(prompt) {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const jsonText = response.text().replace(/```json|```/g, '').trim();
-    return JSON.parse(jsonText);
-}
+// --- MODELOS AHORA IMPORTADOS DESDE /models ---
 
 /**
  * Procesa la pregunta del usuario, detecta la intención con Gemini y actúa en consecuencia.
@@ -268,6 +163,7 @@ async function handleSmartReply(to, userQuery, preloadedCustomer = null) {
     try {
         // Llamar a IA
         const prompt = buildMainPrompt(customer, session, userQuery, historyForPrompt);
+        const { generateJsonResponse } = require('../services/aiService');
         const aiResponse = await generateJsonResponse(prompt);
 
         console.log(`🤖 Intención detectada: ${aiResponse.intent}`);
@@ -597,11 +493,16 @@ async function handleProductAction(to, actionId) {
                 break;
                 
             case 'agendar_cita':
-                await whatsapp.sendTextMessage(to,
-                    "📅 ¡Excelente! Para agendar tu cita necesito:\n\n" +
-                    "🗓️ Fecha preferida\n⏰ Hora conveniente\n📍 Sucursal (Centro o Norte)\n💍 Productos a ver\n\n" +
-                    "Responde con tu disponibilidad y coordinaremos todo 😊"
+                const FlowService = require('../services/flowService');
+                
+                // Enviar botón para iniciar el flow de citas
+                const appointmentButton = FlowService.createAppointmentButton(
+                    to, 
+                    "Te ayudo a agendar tu cita de manera rápida y sencilla usando nuestro formulario interactivo:"
                 );
+                
+                const { sendWhatsAppMessage } = require('../services/whatsappService');
+                await sendWhatsAppMessage(to, appointmentButton);
                 break;
                 
             case 'ver_mas_productos':

@@ -5,7 +5,7 @@
 // En desarrollo, se usa el .env local.
 require('dotenv').config();
 const express = require('express');
-const mongoose = require('mongoose');
+const { connectDB } = require('./services/dbService');
 const { processWebhook } = require('./core/webhookHandler.js'); // Importamos el nuevo manejador
 
 // --- CONFIGURACIÓN ---
@@ -94,6 +94,40 @@ app.delete('/clean-user/:phone', async (req, res) => {
     }
 });
 
+// Endpoint específico para flows de citas
+app.post('/webhook/appointment-flow', async (req, res) => {
+    try {
+        console.log('📅 Procesando respuesta de flow de citas:', JSON.stringify(req.body, null, 2));
+        
+        const FlowService = require('./services/flowService');
+        const result = await FlowService.processAppointmentFlowResponse(req.body);
+        
+        if (result.success) {
+            // Enviar mensaje de confirmación
+            const { sendWhatsAppMessage } = require('./services/whatsappService');
+            await sendWhatsAppMessage(result.appointment.customer.phoneNumber, result.confirmationMessage);
+            
+            res.status(200).json({
+                success: true,
+                message: 'Cita creada exitosamente',
+                appointmentId: result.appointment._id
+            });
+        } else {
+            console.error('❌ Error procesando flow de citas:', result.error);
+            res.status(400).json({
+                success: false,
+                error: result.error
+            });
+        }
+    } catch (error) {
+        console.error('❌ Error en endpoint de flow de citas:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 // --- INICIAR SERVIDOR ---
 
 /**
@@ -112,10 +146,14 @@ async function startServer() {
 
   try {
     // 1. Conectar a la base de datos
-    await mongoose.connect(MONGO_URI);
+    await connectDB();
     console.log('✅ Conectado a MongoDB');
 
-    // 2. Iniciar el servidor Express
+    // 2. Inicializar servicio de notificaciones
+    const NotificationService = require('./services/notificationService');
+    NotificationService.init();
+
+    // 3. Iniciar el servidor Express
     app.listen(PORT, () => {
       console.log(`🚀 Servidor de producción escuchando en el puerto ${PORT}`);
     });
