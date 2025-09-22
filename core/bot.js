@@ -214,7 +214,23 @@ async function handleSmartReply(to, userQuery, preloadedCustomer = null) {
         }
     }
 
-    // 4. CLIENTE YA TIENE CONSENTIMIENTO Y NOMBRE - Procesar con IA
+    // 4. DETECTAR SOLICITUD DIRECTA DE CATÁLOGO
+    const catalogKeywords = /\b(catálogo|catalogo|ver productos|productos|mostrar|quiero ver|categorías|categorias|opciones|anillos|cadenas|aretes|pulseras|joyería|joyeria)\b/i;
+    const urgentCatalogKeywords = /\b(ver catálogo|catalogo ya|mostrar productos|quiero ver productos|ver opciones|mostrar opciones)\b/i;
+    
+    if (urgentCatalogKeywords.test(userQuery) || catalogKeywords.test(userQuery)) {
+        console.log(`🏷️ Usuario solicita catálogo directamente: "${userQuery}"`);
+        
+        await whatsapp.sendTextMessage(to, 
+            `¡Perfecto ${customer.name}! 🛍️ Te muestro nuestro catálogo organizado por categorías:`
+        );
+        
+        // Mostrar categorías inmediatamente
+        await whatsapp.sendCategoriesMessage(to);
+        return;
+    }
+
+    // 5. CLIENTE YA TIENE CONSENTIMIENTO Y NOMBRE - Procesar con IA
     console.log(`✅ Cliente completo (${customer.name}). Procesando: "${userQuery}"`);
 
     // Crear/obtener sesión

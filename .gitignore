@@ -3,3 +3,10 @@
 
 # Archivo de variables de entorno (¡NUNCA SUBIR!)
 .env
+
+# Archivos Docker con variables sensibles (¡NUNCA SUBIR!)
+docker-compose.yml
+docker-compose.local.yml
+
+# Solo subir las versiones de ejemplo
+# docker-compose.example.yml - OK para subir

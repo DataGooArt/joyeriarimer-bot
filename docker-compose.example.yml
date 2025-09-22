@@ -1,0 +1,37 @@
+services:
+  joyeria-rimer-bot:
+    image: racuello/joyeria-rimer-bot:2.0.5
+    environment:
+      - MONGO_URI=mongodb://username:password@your-mongodb-cluster-url/database?ssl=true&replicaSet=your-replica-set&authSource=admin&retryWrites=true&w=majority&appName=YourApp
+      - GEMINI_API_KEY=your-gemini-api-key-here
+      - WHATSAPP_TOKEN=your-whatsapp-access-token-here
+      - VERIFY_TOKEN=your-verify-token-here
+      - WHATSAPP_PHONE_NUMBER_ID=your-phone-number-id-here
+      - WHATSAPP_FLOW_WELCOME_ID=your-flow-welcome-id-here
+      # Este debe ser el NOMBRE EXACTO de la plantilla de mensaje en Meta Business Manager.
+      - WHATSAPP_FLOW_TEMPLATE_NAMESPACE=your-template-namespace-here
+      - WELCOME_TEMPLATE_HEADER_IMAGE_URL=https://your-image-url-here.jpeg
+      - WHATSAPP_FLOW_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nYOUR-PRIVATE-KEY-HERE\n-----END PRIVATE KEY-----
+      - PORT=1337
+      - NODE_ENV=production
+      - DISABLE_FLOWS=false
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - joyeria_public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.joyeria-bot-http.rule=Host(`your-domain.com`)"
+      - "traefik.http.routers.joyeria-bot-http.entrypoints=web"
+      - "traefik.http.routers.joyeria-bot-http.middlewares=https-redirect@file"
+      - "traefik.http.routers.joyeria-bot-https.rule=Host(`your-domain.com`)"
+      - "traefik.http.routers.joyeria-bot-https.entrypoints=websecure"
+      - "traefik.http.routers.joyeria-bot-https.tls=true"
+      - "traefik.http.routers.joyeria-bot-https.tls.certresolver=letsencryptresolver"
+      - "traefik.http.services.joyeria-bot.loadbalancer.server.port=1337"
+
+networks:
+  joyeria_public:
+    external: true

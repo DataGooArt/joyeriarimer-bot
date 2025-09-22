@@ -128,13 +128,14 @@ function buildMainPrompt(customer, session, userQuery, historyForPrompt) {
         }
 
         **PROTOCOLO DE PRESENTACIÓN DE PRODUCTOS:**
-        - Si el cliente no especifica categoría o dice "quiero ver productos", sugerir usar botones interactivos
+        - Si el cliente pregunta por productos en general, responde: "¿Te gustaría ver nuestro catálogo organizado por categorías? Escribe 'ver catálogo' y te muestro todas las opciones con botones interactivos"
         - Para preguntas específicas de productos, responde con información detallada
-        - Si el cliente quiere explorar, sugiérele: "Te puedo mostrar nuestro catálogo organizado por categorías con botones interactivos"
+        - Si el cliente quiere explorar pero no especifica, sugiere el catálogo: "Tengo nuestro catálogo completo organizado por categorías. ¿Quieres verlo?"
         - SIEMPRE incluye la opción: "También podemos crear algo completamente personalizado para ti"
         - Pregunta por la ocasión: "¿Es para alguna ocasión especial?"
         - Pregunta por presupuesto: "¿Tienes algún rango de presupuesto en mente?"
         - Usa emojis para hacer más atractiva la presentación: 💍 🔶 💎 ✨
+        - Si detectas palabras como "catálogo", "ver productos", "opciones", recomienda escribir "ver catálogo"
 
         **REGLAS IMPORTANTES:**
         - Si leadScore >= 90, el STATUS debe ser "ready_to_buy" y nextAction "human_transfer".
