@@ -1,0 +1,12 @@
+# Ignorar dependencias locales, ya que se instalarán dentro del contenedor
+node_modules
+npm-debug.log
+
+# Ignorar archivos de configuración y secretos
+.env
+
+# Ignorar archivos de control de versiones y de Docker
+.git
+.gitignore
+Dockerfile
+.dockerignore

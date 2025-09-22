@@ -69,11 +69,11 @@ docker-compose -f docker-compose.local.yml up --build
 1.  **Construye y sube la imagen a Docker Hub:**
     ```bash
     # Construir la imagen
-    docker build -t racuello/joyeria-rimer-bot:1.0.0 .
+    docker build -t racuello/joyeria-rimer-bot:2.0.2 .
     # Iniciar sesión en Docker Hub
     docker login
     # Subir la imagen
-    docker push racuello/joyeria-rimer-bot:1.0.0
+    docker push racuello/joyeria-rimer-bot:2.0.2
     ```
 2.  Despliega el stack en Portainer usando el contenido del archivo `docker-compose.yml` y configurando las variables de entorno en la UI de Portainer.
 
