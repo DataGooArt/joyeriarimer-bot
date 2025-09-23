@@ -150,19 +150,84 @@ class NotificationService {
   }
 
   /**
+   * 📅 Enviar confirmación inmediata al cliente después de agendar cita desde Flow
+   */
+  static async sendAppointmentConfirmationFromFlow(appointment) {
+    try {
+      const customer = appointment.customer;
+      const service = AppointmentService.SERVICES.find(s => s.id === appointment.serviceType);
+      
+      // Extraer ubicación de las notas (formato: "Sede: Cartagena\nEmail...")
+      let location = 'Nuestro taller';
+      if (appointment.notes && appointment.notes.includes('Sede:')) {
+        const locationMatch = appointment.notes.match(/Sede: ([^\n]+)/);
+        if (locationMatch) {
+          location = locationMatch[1];
+        }
+      }
+      
+      const appointmentDate = appointment.dateTime.toLocaleDateString('es-CO', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+      
+      const appointmentTime = appointment.dateTime.toLocaleTimeString('es-CO', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+
+      const confirmationMessage = {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: customer.phoneNumber,
+        type: "text",
+        text: {
+          body: `✅ *¡Cita Confirmada Exitosamente!*\n\n` +
+                `¡Hola ${customer.name}! 🤗\n\n` +
+                `Tu cita ha sido agendada:\n\n` +
+                `📅 **${appointmentDate}**\n` +
+                `🕐 **${appointmentTime}**\n` +
+                `💎 **${service?.title || appointment.serviceType}**\n` +
+                `📍 **${location}**\n\n` +
+                `📝 *Código de cita:* #${appointment._id.toString().slice(-8)}\n\n` +
+                `🔔 *Recordatorios automáticos:*\n` +
+                `• Te recordaremos 1 día antes\n` +
+                `• Confirmaremos el día de la cita\n\n` +
+                `📞 *¿Necesitas cambios?*\n` +
+                `Solo escríbenos y te ayudamos.\n\n` +
+                `¡Esperamos verte pronto! ✨\n` +
+                `*Joyería Rimer* 💎`
+        }
+      };
+
+      await sendWhatsAppMessage(customer.phoneNumber, confirmationMessage);
+      console.log(`✅ Confirmación de Flow enviada a ${customer.name} (${customer.phoneNumber})`);
+      
+    } catch (error) {
+      console.error('❌ Error enviando confirmación de cita desde Flow:', error);
+    }
+  }
+
+  /**
    * Enviar notificación inmediata de nueva cita (para el administrador)
    */
   static async sendNewAppointmentNotification(appointment) {
-    // Aquí podrías enviar notificación a un número de administrador
-    // Por ahora solo logueamos
-    const customer = appointment.customer;
-    const serviceInfo = AppointmentService.SERVICES[appointment.serviceType];
+    // Llamar a la confirmación del cliente
+    await this.sendAppointmentConfirmationFromFlow(appointment);
     
-    console.log(`🆕 NUEVA CITA AGENDADA:`);
+    // Log para administrador
+    const customer = appointment.customer;
+    const service = AppointmentService.SERVICES.find(s => s.id === appointment.serviceType);
+    
+    console.log(`🆕 NUEVA CITA AGENDADA VIA FLOW:`);
     console.log(`👤 Cliente: ${customer.name} (${customer.phoneNumber})`);
-    console.log(`📅 Fecha: ${appointment.dateTime.toLocaleString('es-ES')}`);
-    console.log(`🔧 Servicio: ${serviceInfo?.title}`);
+    console.log(`📅 Fecha: ${appointment.dateTime.toLocaleString('es-CO')}`);
+    console.log(`� Servicio: ${service?.title || appointment.serviceType}`);
     console.log(`📝 Notas: ${appointment.notes || 'Ninguna'}`);
+    console.log(`🆔 ID: ${appointment._id}`);
     
     // Si tienes un número de administrador, podrías enviar:
     // const adminPhone = process.env.ADMIN_PHONE_NUMBER;

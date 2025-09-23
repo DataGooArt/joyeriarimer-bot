@@ -4,94 +4,147 @@
 const Appointment = require('../models/Appointment');
 const Customer = require('../models/Customer');
 
+// 🏪 Configuración de sedes para Joyería Rimer
+const JOYERIA_LOCATIONS = [
+    {
+        id: "cartagena",
+        title: "Cartagena de Indias"
+    },
+    {
+        id: "santa_marta", 
+        title: "Santa Marta"
+    }
+];
+
 class AppointmentService {
   
-  // Tipos de servicios disponibles en la joyería
-  static SERVICES = {
-    TASACION: {
+  // Tipos de servicios disponibles en la joyería (formato para Flow)
+  static SERVICES = [
+    {
       id: 'tasacion',
-      title: '💎 Tasación de Joyas',
-      duration: 30, // minutos
-      description: 'Evaluación profesional del valor de tus joyas'
+      title: '💎 Tasación de Joyas'
     },
-    DISEÑO_PERSONALIZADO: {
+    {
       id: 'diseño_personalizado', 
-      title: '✨ Diseño Personalizado',
-      duration: 60,
-      description: 'Consultoría para crear tu joya única'
+      title: '✨ Diseño Personalizado'
     },
-    REPARACION: {
+    {
       id: 'reparacion',
-      title: '🔧 Reparación de Joyas', 
-      duration: 45,
-      description: 'Restauración y reparación de joyas'
+      title: '🔧 Reparación de Joyas'
     },
-    COMPRA_PRESENCIAL: {
+    {
       id: 'compra_presencial',
-      title: '🛍️ Asesoría de Compra',
-      duration: 45, 
-      description: 'Asesoría personalizada para seleccionar joyas'
+      title: '🛍️ Asesoría de Compra'
+    },
+    {
+      id: 'limpieza',
+      title: '✨ Limpieza y Mantenimiento'
     }
-  };
-
-  // Horarios disponibles por día
-  static AVAILABLE_TIMES = [
-    '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-    '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00'
   ];
 
   /**
-   * Generar fechas disponibles para los próximos 30 días (excluyendo domingos)
+   * Configuración de horarios disponibles (Lunes a Viernes)
+   */
+  static AVAILABLE_TIMES = [
+    '09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
+    '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM'
+  ];
+
+  /**
+   * 📅 Genera fechas disponibles para las próximas 3 semanas (solo días laborales)
    */
   static getAvailableDates() {
     const dates = [];
     const today = new Date();
     
-    for (let i = 1; i <= 30; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      
-      // Excluir domingos (0 = domingo)
-      if (date.getDay() !== 0) {
-        dates.push({
-          id: date.toISOString().split('T')[0], // YYYY-MM-DD
-          title: date.toLocaleDateString('es-ES', { 
-            weekday: 'short', 
-            day: '2-digit', 
-            month: 'short' 
-          })
-        });
-      }
+    // Generar fechas para las próximas 3 semanas
+    for (let i = 1; i <= 21; i++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() + i);
+        
+        // Solo incluir días laborales (Lunes = 1, Viernes = 5)
+        const dayOfWeek = date.getDay();
+        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+            dates.push({
+                id: date.toISOString().split('T')[0], // YYYY-MM-DD
+                title: date.toLocaleDateString('es-CO', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long'
+                })
+            });
+        }
     }
     
     return dates;
   }
 
   /**
-   * Obtener horarios disponibles para una fecha específica
+   * ⏰ Obtiene horarios disponibles para una fecha específica
    */
-  static async getAvailableTimesForDate(date) {
-    // Buscar citas existentes para esa fecha
-    const existingAppointments = await Appointment.find({
-      dateTime: {
-        $gte: new Date(date + 'T00:00:00.000Z'),
-        $lt: new Date(date + 'T23:59:59.999Z')
-      },
-      status: { $in: ['pending', 'confirmed'] }
-    });
+  static async getAvailableTimesForDate(dateString) {
+    console.log('⏰ Obteniendo horarios disponibles para:', dateString);
+    
+    try {
+        // Obtener citas existentes para esa fecha
+        const existingAppointments = await Appointment.find({
+            dateTime: {
+                $gte: new Date(dateString + 'T00:00:00.000Z'),
+                $lte: new Date(dateString + 'T23:59:59.999Z')
+            },
+            status: { $in: ['pending', 'confirmed'] }
+        });
 
-    const bookedTimes = existingAppointments.map(apt => {
-      return apt.dateTime.toTimeString().slice(0, 5); // HH:MM
-    });
+        // Extraer horarios ocupados en formato AM/PM
+        const occupiedTimes = existingAppointments.map(apt => {
+            const hour = apt.dateTime.getHours();
+            const minutes = apt.dateTime.getMinutes();
+            return this.formatTimeFromHourMinute(hour, minutes);
+        });
 
-    // Filtrar horarios disponibles
-    return this.AVAILABLE_TIMES
-      .filter(time => !bookedTimes.includes(time))
-      .map(time => ({
-        id: time,
-        title: time,
-        enabled: true
-      }));
+        console.log(`📋 Horarios ocupados en ${dateString}:`, occupiedTimes);
+
+        // Filtrar horarios disponibles
+        const availableTimes = this.AVAILABLE_TIMES
+            .filter(time => !occupiedTimes.includes(time))
+            .map(time => ({ id: time, title: time }));
+
+        console.log('✅ Horarios disponibles:', availableTimes);
+        return availableTimes;
+        
+    } catch (error) {
+        console.error('❌ Error obteniendo horarios disponibles:', error);
+        // En caso de error, devolver todos los horarios
+        return this.AVAILABLE_TIMES.map(time => ({ id: time, title: time }));
+    }
+  }
+
+  /**
+   * 🕐 Convierte hora y minutos a formato AM/PM
+   */
+  static formatTimeFromHourMinute(hour, minute) {
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
+    const displayMinute = minute.toString().padStart(2, '0');
+    
+    return `${displayHour.toString().padStart(2, '0')}:${displayMinute} ${period}`;
+  }
+
+  /**
+   * ⏰ Convierte formato AM/PM a 24 horas (HH:MM)
+   */
+  static convertTo24Hour(timeAMPM) {
+    const [time, period] = timeAMPM.split(' ');
+    const [hours, minutes] = time.split(':');
+    let hour24 = parseInt(hours);
+    
+    if (period === 'PM' && hour24 !== 12) {
+        hour24 += 12;
+    } else if (period === 'AM' && hour24 === 12) {
+        hour24 = 0;
+    }
+    
+    return `${hour24.toString().padStart(2, '0')}:${minutes}`;
   }
 
   /**
@@ -120,7 +173,8 @@ class AppointmentService {
     }
 
     // Crear fecha y hora completa
-    const appointmentDateTime = new Date(`${date}T${time}:00.000Z`);
+    const time24 = this.convertTo24Hour(time);
+    const appointmentDateTime = new Date(`${date}T${time24}:00.000Z`);
 
     // Crear cita
     const appointment = new Appointment({
@@ -173,6 +227,205 @@ class AppointmentService {
       dateTime: { $gte: startOfDay, $lte: endOfDay },
       status: 'pending'
     }).populate('customer');
+  }
+
+  /**
+   * 🔄 Maneja el Flow de agendamiento específico (ID: 24509326838732458)
+   */
+  static async handleAppointmentFlow(decryptedBody) {
+    console.log('📅 Procesando Flow de agendamiento:', JSON.stringify(decryptedBody, null, 2));
+    
+    const { screen, data: formData, action } = decryptedBody;
+    
+    try {
+        switch (screen) {
+            case 'APPOINTMENT':
+                return await this.handleAppointmentScreen(formData, action);
+                
+            case 'DETAILS':
+                return await this.handleDetailsScreen(formData);
+                
+            case 'SUMMARY':
+                return await this.handleSummaryScreen(formData);
+                
+            default:
+                console.log(`⚠️ Pantalla no reconocida: ${screen}`);
+                return {
+                    version: "3.0",
+                    screen: "APPOINTMENT",
+                    data: this.getInitialAppointmentData()
+                };
+        }
+    } catch (error) {
+        console.error('❌ Error procesando Flow de agendamiento:', error);
+        return {
+            version: "3.0",
+            screen: "APPOINTMENT", // Volver al inicio en caso de error
+            data: this.getInitialAppointmentData()
+        };
+    }
+  }
+
+  /**
+   * 📋 Maneja la pantalla de selección de cita
+   */
+  static async handleAppointmentScreen(formData, action) {
+    console.log('📋 Procesando pantalla APPOINTMENT, acción:', action);
+    
+    const baseData = {
+        department: this.SERVICES,
+        location: JOYERIA_LOCATIONS,
+        is_location_enabled: true,
+        date: this.getAvailableDates(),
+        is_date_enabled: false, // Se habilita después de seleccionar servicio
+        time: this.AVAILABLE_TIMES.map(time => ({ id: time, title: time })),
+        is_time_enabled: false  // Se habilita después de seleccionar fecha
+    };
+    
+    // Manejar acciones específicas de data_exchange
+    if (formData && formData.trigger) {
+        switch (formData.trigger) {
+            case 'department_selected':
+                console.log('🎯 Servicio seleccionado:', formData.department);
+                baseData.is_date_enabled = true;
+                break;
+                
+            case 'location_selected':
+                console.log('📍 Ubicación seleccionada:', formData.location);
+                baseData.is_date_enabled = true;
+                break;
+                
+            case 'date_selected':
+                console.log('📅 Fecha seleccionada:', formData.date);
+                // Obtener horarios disponibles para la fecha
+                const availableTimes = await this.getAvailableTimesForDate(formData.date);
+                baseData.time = availableTimes;
+                baseData.is_time_enabled = true;
+                break;
+        }
+    }
+    
+    return {
+        version: "3.0",
+        screen: "APPOINTMENT", 
+        data: baseData
+    };
+  }
+
+  /**
+   * 👤 Maneja la pantalla de detalles del cliente
+   */
+  static async handleDetailsScreen(formData) {
+    console.log('👤 Procesando pantalla DETAILS con datos:', formData);
+    
+    // Preparar datos para la pantalla de resumen
+    const appointmentSummary = this.generateAppointmentSummary(formData);
+    const detailsSummary = this.generateDetailsSummary(formData);
+    
+    return {
+        version: "3.0",
+        screen: "SUMMARY",
+        data: {
+            appointment: appointmentSummary,
+            details: detailsSummary,
+            department: formData.department,
+            location: formData.location,
+            date: formData.date,
+            time: formData.time,
+            name: formData.name,
+            email: formData.email,
+            phone: formData.phone,
+            more_details: formData.more_details || ''
+        }
+    };
+  }
+
+  /**
+   * ✅ Maneja la confirmación final y guarda la cita
+   */
+  static async handleSummaryScreen(formData) {
+    console.log('✅ Confirmando cita con datos:', formData);
+    
+    try {
+        // Crear la cita usando el método existente
+        const appointmentData = {
+            customerPhone: formData.phone,
+            customerName: formData.name,
+            service: formData.department,
+            date: formData.date,
+            time: formData.time,
+            notes: `Sede: ${formData.location}\nEmail: ${formData.email}\n${formData.more_details || ''}`,
+            conversationId: null // TODO: Obtener del contexto
+        };
+        
+        const appointment = await this.createAppointment(appointmentData);
+        console.log('💾 Cita guardada en base de datos:', appointment._id);
+        
+        return {
+            version: "3.0",
+            screen: "SUCCESS",
+            data: {
+                success_message: "¡Cita confirmada exitosamente! Te contactaremos pronto.",
+                appointment_details: `Cita #${appointment._id.toString().slice(-8)} confirmada`
+            }
+        };
+        
+    } catch (error) {
+        console.error('❌ Error guardando cita:', error);
+        return {
+            version: "3.0", 
+            screen: "APPOINTMENT", // Volver al inicio
+            data: this.getInitialAppointmentData()
+        };
+    }
+  }
+
+  /**
+   * 📝 Genera resumen de la cita
+   */
+  static generateAppointmentSummary(formData) {
+    const service = this.SERVICES.find(s => s.id === formData.department);
+    const location = JOYERIA_LOCATIONS.find(l => l.id === formData.location);
+    
+    const date = new Date(formData.date);
+    const formattedDate = date.toLocaleDateString('es-CO', {
+        weekday: 'long',
+        day: 'numeric', 
+        month: 'long',
+        year: 'numeric'
+    });
+    
+    return `${service?.title || 'Servicio'} en ${location?.title || 'Sede'}\n${formattedDate} a las ${formData.time}`;
+  }
+
+  /**
+   * 👤 Genera resumen de detalles del cliente
+   */
+  static generateDetailsSummary(formData) {
+    let summary = `Nombre: ${formData.name || 'No especificado'}\n`;
+    summary += `Email: ${formData.email || 'No especificado'}\n`;
+    summary += `Teléfono: ${formData.phone || 'No especificado'}`;
+    
+    if (formData.more_details) {
+        summary += `\n\nDetalles adicionales:\n${formData.more_details}`;
+    }
+    
+    return summary;
+  }
+
+  /**
+   * 🔄 Obtiene datos iniciales para la pantalla de cita
+   */
+  static getInitialAppointmentData() {
+    return {
+        department: this.SERVICES,
+        location: JOYERIA_LOCATIONS,
+        is_location_enabled: true,
+        date: this.getAvailableDates(),
+        is_date_enabled: false,
+        time: this.AVAILABLE_TIMES.map(time => ({ id: time, title: time })),
+        is_time_enabled: false
+    };
   }
 }
 

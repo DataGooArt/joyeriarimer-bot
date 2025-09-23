@@ -201,6 +201,16 @@ async function handleSmartReply(to, userQuery, preloadedCustomer = null) {
             case 'product_inquiry':
                 await whatsapp.sendTextMessage(to, aiResponse.response);
                 break;
+            case 'schedule_appointment':
+                // 🆕 NUEVA FUNCIONALIDAD: Activar Flow de Citas Dinámico
+                console.log('📅 Detectada intención de agendar cita - Enviando Flow dinámico');
+                await whatsapp.sendTextMessage(to, aiResponse.response);
+                
+                // Enviar Flow de citas interactivo después de un breve delay
+                setTimeout(async () => {
+                    await sendAppointmentFlow(to);
+                }, 2000);
+                break;
             case 'human_handover':
                 await whatsapp.sendTextMessage(to, aiResponse.response);
                 await transferToChatwoot(to, userQuery);
@@ -519,6 +529,66 @@ async function handleProductAction(to, actionId) {
     }
 }
 
+/**
+ * 📅 Envía el Flow de citas dinámico al usuario
+ * @param {string} to - Número de teléfono del usuario
+ */
+async function sendAppointmentFlow(to) {
+    try {
+        console.log(`📅 Enviando Flow de citas dinámico a ${to}`);
+        
+        // Mensaje de Flow con el ID del Flow de citas
+        const flowMessage = {
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: to,
+            type: "interactive",
+            interactive: {
+                type: "flow",
+                header: {
+                    type: "text",
+                    text: "Agenda tu Cita ✨"
+                },
+                body: {
+                    text: "Te voy a ayudar a agendar tu cita de manera rápida y sencilla. Solo necesito algunos datos:"
+                },
+                footer: {
+                    text: "Joyería Rimer - Cartagena y Santa Marta"
+                },
+                action: {
+                    name: "flow",
+                    parameters: {
+                        flow_message_version: "3",
+                        flow_token: `appointment_${Date.now()}_${to.replace('+', '')}`,
+                        flow_id: "24509326838732458",
+                        flow_cta: "Agendar Cita",
+                        flow_action: "navigate",
+                        flow_action_payload: {
+                            screen: "APPOINTMENT",
+                            data: {}
+                        }
+                    }
+                }
+            }
+        };
+
+        await whatsapp.sendMessageAPI(flowMessage);
+        console.log('✅ Flow de citas enviado exitosamente');
+        
+    } catch (error) {
+        console.error('❌ Error enviando Flow de citas:', error);
+        
+        // Fallback: mensaje con botón simple si el Flow falla
+        await whatsapp.sendTextMessage(to, 
+            "📅 *¡Agenda tu Cita!*\n\n" +
+            "Para agendar tu cita, por favor contáctanos:\n\n" +
+            "📞 **Cartagena**: +57 300 123 4567\n" +
+            "📞 **Santa Marta**: +57 300 123 4568\n\n" +
+            "O escríbeme los detalles de tu cita y te ayudo a coordinarla."
+        );
+    }
+}
+
 module.exports = {
     handleSmartReply,
     handleProductSelection,
@@ -528,6 +598,7 @@ module.exports = {
     handleProductAction,
     cleanUserData,
     getModel,
+    sendAppointmentFlow,
     Customer,
     ChatSession,
     MessageLog

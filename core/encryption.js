@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const fs = require('fs');
 
 class FlowEndpointException extends Error {
     constructor(statusCode, message) {
@@ -25,16 +26,29 @@ function decryptRequest(body, privatePem) {
 
     let decryptedAesKey;
     try {
+        console.log('🔐 Intentando crear objeto de clave privada...');
+        const privateKeyObject = crypto.createPrivateKey(privatePem);
+        console.log('✅ Objeto de clave privada creado exitosamente');
+        
+        console.log('🔓 Descifrando clave AES...');
         decryptedAesKey = crypto.privateDecrypt(
             {
-                key: crypto.createPrivateKey(privatePem),
+                key: privateKeyObject,
                 padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
                 oaepHash: 'sha256',
             },
             Buffer.from(encrypted_aes_key, 'base64')
         );
+        console.log('✅ Clave AES descifrada exitosamente');
     } catch (error) {
-        console.error('❌ Error al descifrar la clave AES. Verifica tu clave privada.', error);
+        console.error('❌ Error al descifrar la clave AES. Detalles del error:', {
+            name: error.name,
+            message: error.message,
+            code: error.code,
+            library: error.library,
+            reason: error.reason
+        });
+        console.error('❌ Stack trace completo:', error.stack);
         // Código 421 le indica al cliente de WhatsApp que debe refrescar la clave pública.
         throw new FlowEndpointException(421, 'Fallo al descifrar la solicitud. Por favor, verifica tu clave privada.');
     }
@@ -82,4 +96,54 @@ function encryptResponse(response, aesKeyBuffer, initialVectorBuffer) {
     return encryptedResponse.toString('base64');
 }
 
-module.exports = { decryptRequest, encryptResponse, FlowEndpointException };
+/**
+ * Obtiene la clave privada desde archivo o variable de entorno
+ * @returns {string} La clave privada en formato PEM
+ */
+function getPrivateKey() {
+    // Primero intenta leer desde archivo
+    const privateKeyFile = process.env.WHATSAPP_FLOW_PRIVATE_KEY_FILE;
+    if (privateKeyFile && fs.existsSync(privateKeyFile)) {
+        console.log('📁 Leyendo clave privada desde archivo:', privateKeyFile);
+        return fs.readFileSync(privateKeyFile, 'utf8');
+    }
+    
+    // Intenta variable de entorno en Base64 (recomendado para Docker)
+    const privateKeyB64 = process.env.WHATSAPP_FLOW_PRIVATE_KEY_B64;
+    if (privateKeyB64) {
+        console.log('🔑 Usando clave privada desde variable Base64');
+        try {
+            const processedKey = Buffer.from(privateKeyB64, 'base64').toString('utf8');
+            console.log('✅ Clave Base64 decodificada correctamente');
+            return processedKey;
+        } catch (error) {
+            console.error('❌ Error decodificando clave Base64:', error.message);
+            throw new Error('Error decodificando WHATSAPP_FLOW_PRIVATE_KEY_B64');
+        }
+    }
+    
+    // Si no existe Base64, usa la variable de entorno normal
+    const privateKeyEnv = process.env.WHATSAPP_FLOW_PRIVATE_KEY;
+    if (privateKeyEnv) {
+        console.log('🔑 Usando clave privada desde variable de entorno');
+        
+        // Si la clave viene con \n como string literal, los reemplazamos por saltos de línea reales
+        let processedKey = privateKeyEnv.replace(/\\n/g, '\n');
+        
+        // Asegurar que el formato PEM sea correcto
+        if (!processedKey.startsWith('-----BEGIN PRIVATE KEY-----')) {
+            throw new Error('Formato de clave privada inválido: debe comenzar con -----BEGIN PRIVATE KEY-----');
+        }
+        
+        if (!processedKey.endsWith('-----END PRIVATE KEY-----')) {
+            throw new Error('Formato de clave privada inválido: debe terminar con -----END PRIVATE KEY-----');
+        }
+        
+        console.log('✅ Formato de clave privada validado correctamente');
+        return processedKey;
+    }
+    
+    throw new Error('No se encontró la clave privada. Configure WHATSAPP_FLOW_PRIVATE_KEY_FILE, WHATSAPP_FLOW_PRIVATE_KEY_B64 o WHATSAPP_FLOW_PRIVATE_KEY');
+}
+
+module.exports = { decryptRequest, encryptResponse, FlowEndpointException, getPrivateKey };

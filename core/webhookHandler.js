@@ -1,6 +1,6 @@
 'use strict';
 
-const { decryptRequest, encryptResponse, FlowEndpointException } = require('./encryption.js');
+const { decryptRequest, encryptResponse, FlowEndpointException, getPrivateKey } = require('./encryption.js');
 const { 
     handleSmartReply, 
     handleProductSelection, 
@@ -24,18 +24,28 @@ async function processWebhook(body) {
     // Si el body contiene los campos de cifrado, es una solicitud de un Flow.
     if (body.encrypted_flow_data && body.encrypted_aes_key && body.initial_vector) {
         console.log('🔄 Detectada solicitud de Flow cifrada.');
-        const privateKey = process.env.WHATSAPP_FLOW_PRIVATE_KEY;
-        if (!privateKey) {
-            console.error('❌ Falta la variable de entorno WHATSAPP_FLOW_PRIVATE_KEY.');
-            return; // No podemos hacer nada sin la clave.
-        }
-
+        
         try {
+            const privateKey = getPrivateKey();
             const { decryptedBody, aesKeyBuffer, initialVectorBuffer } = decryptRequest(body, privateKey);
             console.log('✅ Flow descifrado:', JSON.stringify(decryptedBody, null, 2));
-            // Aquí procesaríamos la lógica del flow y generaríamos una respuesta.
-            // Por ahora, solo acusamos de recibido para la prueba de salud.
-            const response = { data: { acknowledged: true } };
+            // --- Lógica del Flow ---
+            let response;
+            if (decryptedBody.action === 'ping') {
+                // Para ping de validación, Meta espera específicamente esta respuesta
+                console.log('✅ Respondiendo al ping de validación de Meta.');
+                response = {
+                    data: {
+                        status: "active"
+                    }
+                };
+            } else {
+                // Aquí iría la lógica para otras acciones del flow
+                // Por ahora, solo acusamos de recibido.
+                console.log(`🎬 Acción del flow recibida: ${decryptedBody.action}`);
+                response = { data: { acknowledged: true } };
+            }
+            
             return encryptResponse(response, aesKeyBuffer, initialVectorBuffer);
         } catch (error) {
             console.error('❌ Error en el procesamiento del Flow cifrado:', error);

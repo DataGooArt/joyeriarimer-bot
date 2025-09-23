@@ -1,98 +1,136 @@
-# 💎 Bot de WhatsApp para Joyería Rimer
+# 💎 Bot de WhatsApp IA para Joyería Rimer
 
-Este proyecto es un **agente de IA conversacional avanzado** para WhatsApp, diseñado específicamente para la Joyería Rimer. El bot proporciona una experiencia de compra personalizada, catálogo interactivo con botones, y sistema de leads inteligente.
+Sistema de **IA conversacional avanzado** con **WhatsApp Flows** integrado para Joyería Rimer. Incluye detección automática de intenciones, sistema de citas interactivo, catálogo con botones, y gestión completa de leads.
 
 ## ✨ Características Principales
 
-### 🤖 **IA Conversacional Avanzada**
+### 🤖 **IA Conversacional con Detección de Intenciones**
 *   **Google Gemini AI:** Procesamiento de lenguaje natural para conversaciones fluidas
+*   **Detección Automática:** Reconoce intención de agendar citas automáticamente
+*   **Activación de Flows:** Lanza WhatsApp Flows interactivos según el contexto
 *   **Memoria Contextual:** Recuerda conversaciones previas y preferencias del cliente
-*   **Detección de Intenciones:** Clasifica automáticamente consultas (productos, cotizaciones, citas, etc.)
 *   **Lead Scoring:** Evalúa automáticamente la calidad del prospecto (1-10)
+
+### 📅 **Sistema de Citas AI con WhatsApp Flows**
+*   **Flow ID 24509326838732458:** Flow interactivo de citas validado por Meta
+*   **Detección Inteligente:** AI detecta palabras como "cita", "reservar", "appointment"
+*   **Activación Automática:** Lanza el Flow sin intervención manual
+*   **Ubicaciones:** Cartagena y Santa Marta con servicios específicos
+*   **Notificaciones:** Confirmaciones automáticas y recordatorios programados
+*   **Encriptación RSA-2048:** Seguridad completa en comunicaciones
 
 ### 🛍️ **Catálogo Interactivo con Botones**
 *   **Navegación por Categorías:** Anillos, Cadenas, Aretes con botones interactivos
 *   **Visualización de Productos:** Imágenes, precios, descripciones detalladas
-*   **Acceso Inmediato:** Detección de palabras clave para mostrar catálogo instantáneamente
-*   **Flujo Intuitivo:** Categorías → Productos → Detalles → Acciones
+*   **Integración con Citas:** Opción "Agendar Cita" dentro del catálogo
+*   **Flujo Intuitivo:** Categorías → Productos → Detalles → Citas
 
-### 📋 **Sistema de Leads y CRM**
-*   **Captura Automática:** Datos de contacto, preferencias, presupuesto
-*   **Historial Completo:** Todas las interacciones almacenadas en MongoDB
-*   **Seguimiento:** Estado de conversaciones y oportunidades de venta
-*   **Transferencia a Humano:** Sistema de escalación cuando es necesario
+### 📋 **Sistema de Leads y CRM Automatizado**
+*   **Captura Automática:** Datos de citas, contacto, preferencias, presupuesto
+*   **Historial Completo:** Todas las interacciones y citas en MongoDB Atlas
+*   **Seguimiento:** Estado de conversaciones, citas y oportunidades
+*   **Notificaciones:** Sistema cron para recordatorios y confirmaciones
 
-### 🚀 **Flujo de Bienvenida Personalizado**
-*   **WhatsApp Flow Interactive:** Términos y condiciones con UI nativa
-*   **Mensaje Template:** Bienvenida automática con imagen de marca
-*   **Onboarding Guiado:** Presenta opciones y funcionalidades disponibles
-
-### 🔧 **Arquitectura Empresarial**
-*   **Contenedorización:** Docker con multi-stage builds optimizados
-*   **Escalabilidad:** Ready para réplicas y balanceadores de carga
-*   **Monitoreo:** Logs estructurados y manejo de errores
-*   **Seguridad:** Variables de entorno y certificados SSL/TLS
+### � **Arquitectura de Seguridad Meta-Validada**
+*   **HMAC-SHA256:** Verificación de webhooks con Meta
+*   **RSA-2048:** Encriptación de WhatsApp Flows
+*   **Endpoint Validado:** Certificado por Meta Business Manager
+*   **Docker Security:** Contenedores seguros con secrets management
 
 ## 🛠️ Tecnologías Utilizadas (Tech Stack)
 
-*   **Backend:** Node.js, Express.js
-*   **IA:** Google Gemini Pro API
+*   **Backend:** Node.js v18+, Express.js
+*   **IA:** Google Gemini Pro API para detección de intenciones
+*   **WhatsApp Flows:** API v23.0 con RSA-2048 encryption
 *   **Base de Datos:** MongoDB Atlas con Mongoose ODM
-*   **Mensajería:** WhatsApp Business Cloud API
-*   **Contenerización:** Docker, Docker Compose
-*   **Proxy Inverso:** Traefik con Let's Encrypt
-*   **Seguridad:** Webhook verification, JWT, HTTPS
-*   **Monitoreo:** Structured logging, error tracking
+*   **Seguridad:** HMAC-SHA256, RSA encryption, Meta validation
+*   **Automatización:** Node-cron para notificaciones programadas
+*   **Contenerización:** Docker, Docker Compose con multi-stage builds
+*   **Monitoreo:** Logs estructurados, error tracking, health checks
 
-## 🚀 Puesta en Marcha
+## 📁 Estructura del Proyecto
+
+```
+whatsapp-joyeria/
+├── 📁 api/                    # Endpoints de WhatsApp
+├── 📁 assets/                 # Imágenes y recursos estáticos
+├── 📁 core/                   # Lógica principal del bot
+│   ├── bot.js                # IA conversacional + detección intenciones
+│   ├── encryption.js         # RSA encryption para Flows
+│   └── webhookHandler.js     # HMAC verification + ping responses
+├── 📁 docs/                   # Documentación técnica
+├── 📁 models/                 # Modelos de MongoDB
+├── 📁 services/              # Servicios de negocio
+│   ├── appointmentService.js # Sistema de citas con Flows
+│   ├── notificationService.js# Notificaciones automáticas
+│   └── whatsappService.js    # API WhatsApp wrapper
+├── 📁 tests/                 # Archivos de prueba y validación
+├── docker-compose.yml        # Configuración producción
+└── index.js                 # Servidor principal con HMAC
+```
+
+## 🚀 Instalación y Configuración
 
 ### Prerrequisitos
 
-*   **Node.js** (v18 o superior)
-*   **Docker** y **Docker Compose**
-*   **MongoDB Atlas** (recomendado) o instancia local
-*   **WhatsApp Business Account** con API Cloud activada
+*   **Node.js v18+** y npm
+*   **Docker** y **Docker Compose** 
+*   **MongoDB Atlas** (recomendado)
+*   **WhatsApp Business Account** con Cloud API
 *   **Google Gemini API Key** ([obtener aquí](https://makersuite.google.com/app/apikey))
-*   **Dominio** con certificado SSL (para producción)
+*   **Meta Business Manager** para configurar Flows
+*   **Dominio SSL** (para webhooks de producción)
 
-### 📋 Configuración Inicial
+### 📋 Configuración Rápida
 
-1.  **Clonar el repositorio:**
+1.  **Clonar e instalar:**
     ```bash
     git clone https://github.com/DataGooArt/joyeriarimer-bot.git
-    cd joyeriarimer-bot
-    ```
-
-2.  **Instalar dependencias:**
-    ```bash
+    cd whatsapp-joyeria
     npm install
     ```
 
-3.  **Configurar variables de entorno:**
+2.  **Configurar variables (.env):**
     ```bash
-    # Copiar plantilla de ejemplo
-    cp .env.example .env
-    # Editar con tus credenciales
-    nano .env
+    # WhatsApp Business API
+    WHATSAPP_TOKEN=your_permanent_token
+    WHATSAPP_PHONE_ID=your_phone_number_id
+    WEBHOOK_VERIFY_TOKEN=your_webhook_verify_token
+    
+    # IA y Servicios
+    GOOGLE_AI_KEY=your_gemini_api_key
+    MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/joyeria
+    
+    # WhatsApp Flows (Requerido para citas)
+    FLOW_PRIVATE_KEY_PATH=./private_key.pem
+    FLOW_ID=24509326838732458
     ```
 
-4.  **Poblar base de datos con productos:**
+3.  **Inicializar base de datos:**
     ```bash
-    node add-products.js
+    npm run setup        # Poblar productos y configurar DB
     ```
 
 ## 🎯 Modos de Ejecución
 
-### 🧪 **Modo Simulación** (Desarrollo rápido)
-Perfecto para probar la lógica del bot sin configurar WhatsApp:
-
+### 🧪 **Desarrollo Local** 
 ```bash
-node local-chat.js
+npm run dev          # Servidor con hot-reload
 ```
 
-### 🐳 **Modo Docker Local**
+### 🤖 **Modo Simulación** (Sin WhatsApp)
 ```bash
-docker-compose -f docker-compose.local.yml up --build
+npm run chat         # Chat local para probar IA
+```
+
+### 🐳 **Docker Local**
+```bash
+npm run docker:local  # Docker con MongoDB local
+```
+
+### 🚀 **Producción**
+```bash
+npm run docker:prod   # Docker con todas las optimizaciones
 ```
 
 ### 🚀 **Modo Producción**

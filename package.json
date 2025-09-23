@@ -4,7 +4,17 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "dev": "node index.js",
+    "chat": "node tests/local-chat.js",
+    "setup": "node add-products.js",
+    "test": "node tests/test-complete-flow.js",
+    "test:appointment": "node tests/test-appointment-flow.js",
+    "test:encryption": "node tests/test-encryption.js",
+    "validate": "node tests/verificar-configuracion.js",
+    "docker:local": "docker-compose -f docker-compose.local.yml up --build",
+    "docker:prod": "docker-compose up --build -d",
+    "docker:test": "docker-compose -f docker-compose.test.yml up --build"
   },
   "keywords": [],
   "author": "Art Comunicaciones",

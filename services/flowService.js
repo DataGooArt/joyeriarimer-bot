@@ -48,7 +48,62 @@ class FlowService {
   /**
    * Procesar respuesta del flow de citas
    */
-  static async processAppointmentFlowResponse(flowData) {
+  static async processAppointmentFlowResponse(decryptedBody) {
+    try {
+      console.log('🔄 Procesando Flow interactivo:', JSON.stringify(decryptedBody, null, 2));
+      
+      // Manejar peticiones de "ping" de Meta para validación
+      if (decryptedBody.action === 'ping') {
+        console.log('🏓 Respondiendo ping de Meta para validación');
+        return {
+          responseRequired: true,
+          data: { status: "active" }
+        };
+      }
+      
+      // Si es una petición de datos (data_exchange), manejar con AppointmentService
+      if (decryptedBody.action === 'data_exchange' || decryptedBody.screen) {
+        const flowResult = await AppointmentService.handleAppointmentFlow(decryptedBody);
+        
+        // Determinar si se requiere respuesta encriptada (navegación entre pantallas)
+        const requiresResponse = flowResult.screen !== 'SUCCESS';
+        
+        return {
+          responseRequired: requiresResponse,
+          data: flowResult
+        };
+      }
+      
+      // Formato legacy para compatibilidad (si viene response directa)
+      if (decryptedBody.response) {
+        return await this.processLegacyAppointmentFlow(decryptedBody);
+      }
+      
+      console.log('⚠️ Formato de Flow no reconocido');
+      return {
+        responseRequired: false,
+        message: 'Formato no reconocido'
+      };
+      
+    } catch (error) {
+      console.error('❌ Error procesando Flow de citas:', error);
+      
+      // En caso de error, redirigir al inicio del Flow
+      return {
+        responseRequired: true,
+        data: {
+          version: "3.0",
+          screen: "APPOINTMENT",
+          data: AppointmentService.getInitialAppointmentData()
+        }
+      };
+    }
+  }
+
+  /**
+   * Procesar respuesta del Flow de citas (LEGACY - mantener para compatibilidad)
+   */
+  static async processLegacyAppointmentFlow(flowData) {
     try {
       const { 
         flow_token,
@@ -96,14 +151,16 @@ class FlowService {
       return {
         success: true,
         appointment,
-        confirmationMessage
+        confirmationMessage,
+        responseRequired: false
       };
 
     } catch (error) {
-      console.error('Error procesando flow de citas:', error);
+      console.error('Error procesando flow de citas legacy:', error);
       return {
         success: false,
-        error: error.message
+        error: error.message,
+        responseRequired: false
       };
     }
   }
