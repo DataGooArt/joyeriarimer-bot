@@ -416,8 +416,8 @@ Este proyecto está bajo la Licencia MIT. Ver archivo `LICENSE` para más detall
 
 - **Issues**: [GitHub Issues](https://github.com/DataGooArt/joyeriarimer-bot/issues)
 - **Documentación**: [Wiki del proyecto](https://github.com/DataGooArt/joyeriarimer-bot/wiki)
-- **Email**: desarrollo@tallerdejoyeriarimer.com
+- **Email**: contacto@rafacuello.online
 
 ---
 
-**Desarrollado con ❤️ para Joyería Rimer** | **Versión actual: 2.0.5** | **© 2025**
+**Desarrollado con ❤️ para Art Comunicaciones** | **Versión actual: 2.0.5** | **© 2025**
