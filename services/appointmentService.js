@@ -148,27 +148,35 @@ class AppointmentService {
   }
 
   /**
-   * Crear nueva cita
+   * Crear nueva cita con campos expandidos
    */
   static async createAppointment(appointmentData) {
     const {
       customerPhone,
       customerName,
+      customerEmail,
       service,
+      location,
       date,
       time,
-      notes,
+      customerNotes,
       conversationId
     } = appointmentData;
 
     // Buscar o crear cliente
-    let customer = await Customer.findOne({ phoneNumber: customerPhone });
+    let customer = await Customer.findOne({ phone: customerPhone });
     if (!customer) {
       customer = new Customer({
-        phoneNumber: customerPhone,
+        phone: customerPhone,
         name: customerName,
-        source: 'whatsapp_appointment'
+        email: customerEmail,
+        metadata: { source: 'whatsapp_flow_appointment' }
       });
+      await customer.save();
+    } else if (customerName && !customer.name) {
+      // Actualizar información si no existía
+      customer.name = customerName;
+      customer.email = customerEmail || customer.email;
       await customer.save();
     }
 
@@ -176,17 +184,23 @@ class AppointmentService {
     const time24 = this.convertTo24Hour(time);
     const appointmentDateTime = new Date(`${date}T${time24}:00.000Z`);
 
-    // Crear cita
+    // Crear cita con campos expandidos
     const appointment = new Appointment({
       customer: customer._id,
       conversation: conversationId,
       dateTime: appointmentDateTime,
       serviceType: service,
+      location: location,
       status: 'pending',
-      notes: notes || ''
+      customerEmail: customerEmail,
+      customerNotes: customerNotes || '',
+      flowId: '24509326838732458',
+      appointmentSource: 'whatsapp_flow'
     });
 
     await appointment.save();
+    console.log(`💾 Cita creada con referencia: ${appointment.appointmentReference}`);
+    
     return appointment.populate('customer');
   }
 
@@ -347,26 +361,36 @@ class AppointmentService {
     console.log('✅ Confirmando cita con datos:', formData);
     
     try {
-        // Crear la cita usando el método existente
+        // Crear la cita con datos completos del Flow
         const appointmentData = {
             customerPhone: formData.phone,
             customerName: formData.name,
+            customerEmail: formData.email,
             service: formData.department,
+            location: formData.location,
             date: formData.date,
             time: formData.time,
-            notes: `Sede: ${formData.location}\nEmail: ${formData.email}\n${formData.more_details || ''}`,
+            customerNotes: formData.more_details || '',
+            termsAccepted: formData.terms_accepted || false,
+            privacyAccepted: formData.privacy_accepted || false,
             conversationId: null // TODO: Obtener del contexto
         };
         
         const appointment = await this.createAppointment(appointmentData);
-        console.log('💾 Cita guardada en base de datos:', appointment._id);
+        console.log('💾 Cita guardada con referencia:', appointment.appointmentReference);
+        
+        // Enviar notificación inmediata
+        const notificationService = require('./notificationService');
+        await notificationService.sendAppointmentConfirmationFromFlow(appointment);
         
         return {
             version: "3.0",
             screen: "SUCCESS",
             data: {
-                success_message: "¡Cita confirmada exitosamente! Te contactaremos pronto.",
-                appointment_details: `Cita #${appointment._id.toString().slice(-8)} confirmada`
+                success_message: `¡Cita confirmada exitosamente! 
+Tu referencia es: ${appointment.appointmentReference}
+Te contactaremos pronto para confirmar los detalles.`,
+                appointment_details: `Referencia: ${appointment.appointmentReference}`
             }
         };
         

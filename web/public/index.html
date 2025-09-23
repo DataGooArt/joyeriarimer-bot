@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💎 Joyería Rimer - Dashboard de Citas</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+        }
+        
+        .appointments-section, .sidebar {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .section-header {
+            background: #667eea;
+            color: white;
+            padding: 15px 20px;
+            font-weight: bold;
+        }
+        
+        .filters {
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            gap: 15px;
+        }
+        
+        .filter-select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: white;
+        }
+        
+        .appointments-list {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .appointment-card {
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s;
+        }
+        
+        .appointment-card:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .appointment-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .appointment-ref {
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .appointment-status {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        
+        .status-pending { background: #fff3cd; color: #856404; }
+        .status-confirmed { background: #d4edda; color: #155724; }
+        .status-completed { background: #cce5ff; color: #004085; }
+        .status-cancelled { background: #f8d7da; color: #721c24; }
+        
+        .appointment-info {
+            font-size: 0.9em;
+            color: #666;
+            line-height: 1.4;
+        }
+        
+        .appointment-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: all 0.2s;
+        }
+        
+        .btn-confirm { background: #28a745; color: white; }
+        .btn-complete { background: #17a2b8; color: white; }
+        .btn-cancel { background: #dc3545; color: white; }
+        
+        .btn:hover {
+            opacity: 0.8;
+        }
+        
+        .sidebar-section {
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .sidebar-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #667eea;
+        }
+        
+        .quick-stats {
+            list-style: none;
+        }
+        
+        .quick-stats li {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            font-size: 0.9em;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .filters {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💎 Joyería Rimer</h1>
+            <p>Dashboard de Gestión de Citas</p>
+        </div>
+        
+        <div class="stats-grid" id="stats-grid">
+            <!-- Stats will be loaded here -->
+        </div>
+        
+        <div class="main-content">
+            <div class="appointments-section">
+                <div class="section-header">
+                    📅 Citas Registradas
+                </div>
+                
+                <div class="filters">
+                    <select class="filter-select" id="status-filter">
+                        <option value="">Todos los estados</option>
+                        <option value="pending">Pendientes</option>
+                        <option value="confirmed">Confirmadas</option>
+                        <option value="completed">Completadas</option>
+                        <option value="cancelled">Canceladas</option>
+                    </select>
+                    
+                    <select class="filter-select" id="location-filter">
+                        <option value="">Todas las sedes</option>
+                        <option value="cartagena">Cartagena</option>
+                        <option value="santa_marta">Santa Marta</option>
+                    </select>
+                    
+                    <button class="btn btn-confirm" onclick="refreshData()">🔄 Actualizar</button>
+                </div>
+                
+                <div class="appointments-list" id="appointments-list">
+                    <div class="loading">Cargando citas...</div>
+                </div>
+            </div>
+            
+            <div class="sidebar">
+                <div class="section-header">
+                    📊 Información Rápida
+                </div>
+                
+                <div class="sidebar-section">
+                    <div class="sidebar-title">🕐 Citas de Hoy</div>
+                    <div id="today-appointments">Cargando...</div>
+                </div>
+                
+                <div class="sidebar-section">
+                    <div class="sidebar-title">💎 Servicios Populares</div>
+                    <ul class="quick-stats" id="services-stats">
+                        <li>Cargando...</li>
+                    </ul>
+                </div>
+                
+                <div class="sidebar-section">
+                    <div class="sidebar-title">📍 Por Ubicación</div>
+                    <ul class="quick-stats" id="location-stats">
+                        <li>Cargando...</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Variables globales
+        let appointments = [];
+        let stats = {};
+        
+        // Mapeo de servicios
+        const serviceNames = {
+            'tasacion': '💎 Tasación',
+            'diseño_personalizado': '✨ Diseño Personalizado',
+            'reparacion': '🔧 Reparación',
+            'compra_presencial': '🛍️ Asesoría de Compra',
+            'limpieza': '✨ Limpieza'
+        };
+        
+        const locationNames = {
+            'cartagena': '📍 Cartagena',
+            'santa_marta': '📍 Santa Marta'
+        };
+        
+        // Cargar datos al iniciar
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStats();
+            loadAppointments();
+            loadTodayAppointments();
+            
+            // Event listeners para filtros
+            document.getElementById('status-filter').addEventListener('change', loadAppointments);
+            document.getElementById('location-filter').addEventListener('change', loadAppointments);
+        });
+        
+        // Cargar estadísticas
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                stats = await response.json();
+                
+                const statsGrid = document.getElementById('stats-grid');
+                statsGrid.innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-number">${stats.total}</div>
+                        <div class="stat-label">Total Citas</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${stats.pending}</div>
+                        <div class="stat-label">Pendientes</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${stats.confirmed}</div>
+                        <div class="stat-label">Confirmadas</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${stats.completed}</div>
+                        <div class="stat-label">Completadas</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${stats.thisWeek}</div>
+                        <div class="stat-label">Esta Semana</div>
+                    </div>
+                `;
+                
+                // Servicios populares
+                const servicesStats = document.getElementById('services-stats');
+                if (stats.services && stats.services.length > 0) {
+                    servicesStats.innerHTML = stats.services.map(service => `
+                        <li>
+                            <span>${serviceNames[service._id] || service._id}</span>
+                            <span><strong>${service.count}</strong></span>
+                        </li>
+                    `).join('');
+                } else {
+                    servicesStats.innerHTML = '<li>Sin datos</li>';
+                }
+                
+                // Por ubicación
+                const locationStats = document.getElementById('location-stats');
+                locationStats.innerHTML = `
+                    <li>
+                        <span>📍 Cartagena</span>
+                        <span><strong>${stats.cartagena || 0}</strong></span>
+                    </li>
+                    <li>
+                        <span>📍 Santa Marta</span>
+                        <span><strong>${stats.santa_marta || 0}</strong></span>
+                    </li>
+                `;
+                
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+        
+        // Cargar citas
+        async function loadAppointments() {
+            try {
+                const status = document.getElementById('status-filter').value;
+                const location = document.getElementById('location-filter').value;
+                
+                let url = '/api/appointments?';
+                if (status) url += `status=${status}&`;
+                if (location) url += `location=${location}&`;
+                
+                const response = await fetch(url);
+                appointments = await response.json();
+                
+                renderAppointments();
+            } catch (error) {
+                console.error('Error loading appointments:', error);
+            }
+        }
+        
+        // Renderizar citas
+        function renderAppointments() {
+            const container = document.getElementById('appointments-list');
+            
+            if (appointments.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <p>No hay citas que mostrar</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = appointments.map(appointment => {
+                const date = new Date(appointment.dateTime);
+                const formattedDate = date.toLocaleDateString('es-CO', {
+                    weekday: 'short',
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                
+                return `
+                    <div class="appointment-card">
+                        <div class="appointment-header">
+                            <span class="appointment-ref">📋 ${appointment.appointmentReference}</span>
+                            <span class="appointment-status status-${appointment.status}">
+                                ${appointment.status.toUpperCase()}
+                            </span>
+                        </div>
+                        <div class="appointment-info">
+                            <strong>👤 ${appointment.customer?.name || 'Sin nombre'}</strong><br>
+                            📱 ${appointment.customer?.phone}<br>
+                            💎 ${serviceNames[appointment.serviceType] || appointment.serviceType}<br>
+                            ${locationNames[appointment.location] || appointment.location}<br>
+                            📅 ${formattedDate}<br>
+                            ${appointment.customerEmail ? `📧 ${appointment.customerEmail}<br>` : ''}
+                            ${appointment.customerNotes ? `📝 ${appointment.customerNotes}` : ''}
+                        </div>
+                        ${appointment.status === 'pending' ? `
+                            <div class="appointment-actions">
+                                <button class="btn btn-confirm" onclick="updateStatus('${appointment._id}', 'confirmed')">
+                                    ✅ Confirmar
+                                </button>
+                                <button class="btn btn-cancel" onclick="updateStatus('${appointment._id}', 'cancelled')">
+                                    ❌ Cancelar
+                                </button>
+                            </div>
+                        ` : ''}
+                        ${appointment.status === 'confirmed' ? `
+                            <div class="appointment-actions">
+                                <button class="btn btn-complete" onclick="updateStatus('${appointment._id}', 'completed')">
+                                    ✨ Completar
+                                </button>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // Citas de hoy
+        async function loadTodayAppointments() {
+            try {
+                const response = await fetch('/api/appointments/today');
+                const todayAppts = await response.json();
+                
+                const container = document.getElementById('today-appointments');
+                if (todayAppts.length === 0) {
+                    container.innerHTML = 'Sin citas para hoy';
+                } else {
+                    container.innerHTML = `${todayAppts.length} cita(s) programada(s)`;
+                }
+            } catch (error) {
+                console.error('Error loading today appointments:', error);
+            }
+        }
+        
+        // Actualizar estado de cita
+        async function updateStatus(appointmentId, newStatus) {
+            try {
+                const response = await fetch(`/api/appointments/${appointmentId}/status`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ status: newStatus })
+                });
+                
+                if (response.ok) {
+                    // Recargar datos
+                    await loadStats();
+                    await loadAppointments();
+                    await loadTodayAppointments();
+                } else {
+                    alert('Error al actualizar el estado');
+                }
+            } catch (error) {
+                console.error('Error updating status:', error);
+                alert('Error al actualizar el estado');
+            }
+        }
+        
+        // Actualizar todos los datos
+        async function refreshData() {
+            await loadStats();
+            await loadAppointments();
+            await loadTodayAppointments();
+        }
+        
+        // Auto-refresh cada 30 segundos
+        setInterval(refreshData, 30000);
+    </script>
+</body>
+</html>

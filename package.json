@@ -12,6 +12,10 @@
     "test:appointment": "node tests/test-appointment-flow.js",
     "test:encryption": "node tests/test-encryption.js",
     "validate": "node tests/verificar-configuracion.js",
+    "dashboard": "node tools/appointment-dashboard.js",
+    "dashboard:pending": "node tools/appointment-dashboard.js pending",
+    "dashboard:stats": "node tools/appointment-dashboard.js stats",
+    "dashboard:today": "node tools/appointment-dashboard.js today",
     "docker:local": "docker-compose -f docker-compose.local.yml up --build",
     "docker:prod": "docker-compose up --build -d",
     "docker:test": "docker-compose -f docker-compose.test.yml up --build"
