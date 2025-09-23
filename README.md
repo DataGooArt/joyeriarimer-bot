@@ -420,4 +420,4 @@ Este proyecto está bajo la Licencia MIT. Ver archivo `LICENSE` para más detall
 
 ---
 
-**Desarrollado con ❤️ para Art Comunicaciones** | **Versión actual: 2.0.5** | **© 2025**
+**Desarrollado con ❤️ por Art Comunicaciones** | **Versión actual: 2.0.5** | **© 2025**
