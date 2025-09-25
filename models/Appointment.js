@@ -9,16 +9,21 @@ const appointmentSchema = new mongoose.Schema({
     
     // Información de la cita
     dateTime: { type: Date, required: true },
-    serviceType: { 
+    serviceId: { 
         type: String, 
         required: true,
-        enum: ['tasacion', 'diseño_personalizado', 'reparacion', 'compra_presencial', 'limpieza']
+        // Los IDs deben coincidir con los del modelo Service
+        enum: ['consulta', 'diseno', 'reparacion', 'valoracion']
     },
-    location: {
+    locationId: {
         type: String,
         required: true,
+        // Los IDs deben coincidir con los del modelo Location
         enum: ['cartagena', 'santa_marta']
     },
+    // Referencias a los modelos (para consultas avanzadas)
+    service: { type: mongoose.Schema.Types.ObjectId, ref: 'Service' },
+    location: { type: mongoose.Schema.Types.ObjectId, ref: 'Location' },
     
     // Estado y seguimiento
     status: { 
@@ -55,15 +60,38 @@ const appointmentSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-// Middleware para generar código de referencia único antes de guardar
-appointmentSchema.pre('save', function(next) {
-    if (!this.appointmentReference) {
-        // Generar código único: JR + timestamp últimos 6 dígitos + random 2 dígitos
-        const timestamp = Date.now().toString().slice(-6);
-        const random = Math.floor(Math.random() * 100).toString().padStart(2, '0');
-        this.appointmentReference = `JR${timestamp}${random}`;
+// Middleware para generar código de referencia único y relacionar ObjectIds antes de guardar
+appointmentSchema.pre('save', async function(next) {
+    try {
+        // Generar código de referencia único
+        if (!this.appointmentReference) {
+            const timestamp = Date.now().toString().slice(-6);
+            const random = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+            this.appointmentReference = `JR${timestamp}${random}`;
+        }
+
+        // Relacionar serviceId con ObjectId de Service
+        if (this.serviceId && !this.service) {
+            const Service = require('./Service');
+            const serviceDoc = await Service.findOne({ id: this.serviceId });
+            if (serviceDoc) {
+                this.service = serviceDoc._id;
+            }
+        }
+
+        // Relacionar locationId con ObjectId de Location  
+        if (this.locationId && !this.location) {
+            const Location = require('./Location');
+            const locationDoc = await Location.findOne({ id: this.locationId });
+            if (locationDoc) {
+                this.location = locationDoc._id;
+            }
+        }
+
+        next();
+    } catch (error) {
+        next(error);
     }
-    next();
 });
 
 // Método para obtener resumen de la cita

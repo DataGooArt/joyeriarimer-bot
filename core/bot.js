@@ -1,19 +1,83 @@
 'use strict';
 
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const mongoose = require('mongoose');
 const whatsapp = require('../api/whatsapp.js');
 const { buildMainPrompt } = require('./prompts');
-const { generateAIResponse } = require('../services/aiService');
-const { connectDB } = require('../services/dbService');
-
-// Importar modelos
+const { appointmentService } = require('../services/appointmentService');
 const Customer = require('../models/Customer');
+const Product = require('../models/Product');
+
+// --- CONFIGURACIÓN E INICIALIZACIÓN DEL LLM ---
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+
+// --- IMPORTACIÓN DE MODELOS ---
+
+// Los modelos ahora se importan desde archivos dedicados
 const ChatSession = require('../models/ChatSession');
 const MessageLog = require('../models/MessageLog');
-const Product = require('../models/Product');
 const Order = require('../models/Order');
 const Appointment = require('../models/Appointment');
 
-// --- MODELOS AHORA IMPORTADOS DESDE /models ---
+// Modelos importados desde archivos dedicados
+
+/**
+ * Genera una respuesta estructurada en JSON a partir de un prompt.
+ * @param {string} prompt - El prompt completo a enviar al modelo de lenguaje.
+ * @returns {Promise<object>} El objeto JSON parseado de la respuesta del modelo.
+ */
+async function generateJsonResponse(prompt) {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const jsonText = response.text().replace(/```json|```/g, '').trim();
+    return JSON.parse(jsonText);
+}
+
+/**
+ * Maneja una solicitud de productos, busca en la BD y envía una lista interactiva.
+ * @param {string} to - El número de teléfono del destinatario.
+ * @param {object} aiResponse - El objeto de respuesta de la IA, que contiene la intención y los datos extraídos.
+ */
+async function handleProductRequest(to, aiResponse) {
+    try {
+        const { preferences } = aiResponse.extractedData || {};
+        let query = { isAvailable: true };
+
+        // Búsqueda de texto simple en campos relevantes si hay preferencias.
+        // Para que esto funcione de manera óptima, la colección 'products' en MongoDB
+        // debería tener un índice de texto en campos como 'name', 'description', 'category', 'tags'.
+        if (preferences && typeof preferences === 'string') {
+            // Limpiamos un poco las preferencias para una mejor búsqueda
+            const searchTerms = preferences.replace(/,/g, ' ').trim();
+            if (searchTerms) {
+                query.$text = { $search: searchTerms };
+            }
+        }
+
+        const products = await Product.find(query).limit(10); // Limitar a 10 para la lista de WhatsApp
+
+        if (products && products.length > 0) {
+            console.log(`🔎 Productos encontrados para "${preferences || 'todos'}": ${products.length}`);
+            
+            await whatsapp.sendProductListMessage(
+                to,
+                products,
+                aiResponse.response, // El texto generado por la IA como cuerpo del mensaje
+                "Ver Catálogo"       // El texto del botón que despliega la lista
+            );
+        } else {
+            console.log(`🚫 No se encontraron productos específicos para: "${preferences || 'búsqueda general'}"`);
+            
+            // Si no hay productos específicos o es una consulta general, mostrar menú de categorías
+            await sendCategoryMenu(to, aiResponse.response);
+        }
+    } catch (error) {
+        console.error("❌ Error en handleProductRequest:", error);
+        await whatsapp.sendTextMessage(to, "Ups, tuve un problema al buscar en nuestro catálogo. Por favor, intenta de nuevo o pide hablar con un asesor.");
+    }
+}
 
 /**
  * Procesa la pregunta del usuario, detecta la intención con Gemini y actúa en consecuencia.
@@ -40,9 +104,39 @@ async function handleSmartReply(to, userQuery, preloadedCustomer = null) {
         const isAccepting = /^(aceptar|acepto|si|sí|ok|continuar|de acuerdo|aceptar y continuar)/i.test(userQuery.trim());
         
         if (isAccepting) {
-            console.log("✅ Usuario aceptando términos vía texto...");
-            // DELEGAR a handleTermsAcceptance para mantener lógica centralizada
-            await handleTermsAcceptance(to);
+            console.log("✅ Usuario aceptando términos por primera vez...");
+            
+            // Actualizar en BD
+            customer.termsAcceptedAt = new Date();
+            customer.tags.addToSet('Términos Aceptados');
+            await customer.save();
+            
+            // ENVIAR FLOW DE BIENVENIDA (ID: 1123954915939585)
+            console.log("🌟 Enviando Flow de Bienvenida...");
+            
+            if (process.env.DISABLE_FLOWS === 'true') {
+                // Modo sin flows - mensaje de texto
+                await whatsapp.sendTextMessage(to, 
+                    "¡Perfecto! Bienvenido a Joyería Rimer. 💎✨\n\n" +
+                    "Somos especialistas en joyería fina artesanal.\n\n" +
+                    "¿En qué te podemos ayudar hoy?\n" +
+                    "• Ver anillos de compromiso\n" +
+                    "• Explorar cadenas y pulseras\n" +
+                    "• Agendar una cita\n" +
+                    "• Hablar con un asesor\n\n" +
+                    "Para comenzar, ¿podrías decirme tu nombre?"
+                );
+            } else {
+                // ENVIAR EL FLOW DE BIENVENIDA
+                await whatsapp.sendFlowMessage(
+                    to,
+                    "1123954915939585", // ID del Flow de Bienvenida
+                    "Bienvenido a Joyería Rimer",
+                    "WELCOME_SCREEN", // Screen inicial del flow
+                    "Empezar",
+                    "¡Bienvenido! Completa tu información para una atención personalizada."
+                );
+            }
             return; // SALIR - Ya enviamos respuesta
         } else {
             // Enviar términos y condiciones
@@ -68,65 +162,8 @@ async function handleSmartReply(to, userQuery, preloadedCustomer = null) {
         }
     }
 
-    // 3. VERIFICAR SI TIENE NOMBRE (después de consentimiento)
-    if (!customer.name || customer.name === 'Desconocido') {
-        console.log(`▶️ Cliente sin nombre detectado. Recolectando información...`);
-        
-        // Si es el primer mensaje después de términos, pedir nombre
-        if (userQuery.toLowerCase().includes('acepto') || userQuery.toLowerCase().includes('ok')) {
-            await whatsapp.sendTextMessage(to, 
-                "¡Perfecto! Ahora, para ofrecerte una atención personalizada...\n\n¿Cuál es tu nombre? 😊"
-            );
-            return;
-        }
-        
-        // Si ya preguntamos por el nombre, asumir que la respuesta ES el nombre
-        const extractedName = userQuery.trim();
-        if (extractedName.length > 1 && extractedName.length < 50) {
-            await Customer.updateOne({ _id: customer._id }, { 
-                name: extractedName,
-                tags: ['Nuevo cliente', 'Información completa']
-            });
-            customer.name = extractedName; // Actualizar objeto local
-            
-            await whatsapp.sendTextMessage(to, 
-                `¡Mucho gusto, ${extractedName}! 🤗\n\n` +
-                "Soy tu asistente personal de Joyería Rimer ✨\n\n" +
-                "¿En qué puedo ayudarte hoy? Puedo mostrarte nuestros productos organizados por categorías con botones interactivos, o si prefieres, háblame directamente sobre lo que buscas.\n\n" +
-                "¡También ofrecemos joyería 100% personalizada!"
-            );
-            
-            // Mostrar categorías con botones después de un breve delay
-            setTimeout(async () => {
-                await whatsapp.sendCategoriesMessage(to);
-            }, 2000);
-            return;
-        } else {
-            await whatsapp.sendTextMessage(to, 
-                "Por favor, compárteme tu nombre para poder atenderte mejor 😊"
-            );
-            return;
-        }
-    }
-
-    // 4. DETECTAR SOLICITUD DIRECTA DE CATÁLOGO
-    const catalogKeywords = /\b(catálogo|catalogo|ver productos|productos|mostrar|quiero ver|categorías|categorias|opciones|anillos|cadenas|aretes|pulseras|joyería|joyeria)\b/i;
-    const urgentCatalogKeywords = /\b(ver catálogo|catalogo ya|mostrar productos|quiero ver productos|ver opciones|mostrar opciones)\b/i;
-    
-    if (urgentCatalogKeywords.test(userQuery) || catalogKeywords.test(userQuery)) {
-        console.log(`🏷️ Usuario solicita catálogo directamente: "${userQuery}"`);
-        
-        await whatsapp.sendTextMessage(to, 
-            `¡Perfecto ${customer.name}! 🛍️ Te muestro nuestro catálogo organizado por categorías:`
-        );
-        
-        // Mostrar categorías inmediatamente
-        await whatsapp.sendCategoriesMessage(to);
-        return;
-    }
-
-    // 5. CLIENTE YA TIENE CONSENTIMIENTO Y NOMBRE - Procesar con IA
-    console.log(`✅ Cliente completo (${customer.name}). Procesando: "${userQuery}"`);
+    // 3. CLIENTE YA TIENE CONSENTIMIENTO - Procesar con IA
+    console.log(`✅ Cliente con consentimiento confirmado. Procesando: "${userQuery}"`);
 
     // Crear/obtener sesión
     let session = await ChatSession.findOne({ customer: customer._id, status: 'open' });
@@ -163,7 +200,6 @@ async function handleSmartReply(to, userQuery, preloadedCustomer = null) {
     try {
         // Llamar a IA
         const prompt = buildMainPrompt(customer, session, userQuery, historyForPrompt);
-        const { generateJsonResponse } = require('../services/aiService');
         const aiResponse = await generateJsonResponse(prompt);
 
         console.log(`🤖 Intención detectada: ${aiResponse.intent}`);
@@ -193,23 +229,22 @@ async function handleSmartReply(to, userQuery, preloadedCustomer = null) {
 
         // Enviar respuesta según intención
         switch (aiResponse.intent) {
+            case 'greeting':
+                // Para saludos, enviar mensaje de bienvenida con menú
+                await whatsapp.sendTextMessage(to, aiResponse.response);
+                await sendCategoryMenu(to, '¿En qué puedo ayudarte hoy?');
+                break;
+            case 'schedule_appointment':
+                console.log('▶️  Iniciando Flow de Agendamiento...');
+                await sendAppointmentFlow(to, aiResponse.response);
+                break;
             case 'collect_name':
             case 'clarify_inquiry':
                 await whatsapp.sendTextMessage(to, aiResponse.response);
                 break;
             case 'list_products':
             case 'product_inquiry':
-                await whatsapp.sendTextMessage(to, aiResponse.response);
-                break;
-            case 'schedule_appointment':
-                // 🆕 NUEVA FUNCIONALIDAD: Activar Flow de Citas Dinámico
-                console.log('📅 Detectada intención de agendar cita - Enviando Flow dinámico');
-                await whatsapp.sendTextMessage(to, aiResponse.response);
-                
-                // Enviar Flow de citas interactivo después de un breve delay
-                setTimeout(async () => {
-                    await sendAppointmentFlow(to);
-                }, 2000);
+                await handleProductRequest(to, aiResponse);
                 break;
             case 'human_handover':
                 await whatsapp.sendTextMessage(to, aiResponse.response);
@@ -224,6 +259,119 @@ async function handleSmartReply(to, userQuery, preloadedCustomer = null) {
         console.error("❌ Error en handleSmartReply:", error);
         await whatsapp.sendTextMessage(to, "Lo siento, hay un problema técnico. Te conectaré con un asesor.");
         await transferToChatwoot(to, `Error técnico: ${error.message}. Mensaje: "${userQuery}"`);
+    }
+}
+
+/**
+ * Envía el Flow de agendamiento de citas con datos optimizados.
+ * @param {string} to - El número de teléfono del destinatario.
+ * @param {string} aiResponse - Respuesta personalizada de la IA.
+ */
+async function sendAppointmentFlow(to, aiResponse) {
+    try {
+        const flowId = process.env.WHATSAPP_FLOW_APPOINTMENT_ID || '1123954915939585';
+        
+        console.log('🔧 OBTENIENDO DATOS DESDE MONGODB PARA FLOW...');
+        
+        // Importar modelos
+        const Service = require('../models/Service');
+        const Location = require('../models/Location');
+        
+        // Obtener servicios y ubicaciones desde MongoDB
+        const services = await Service.getForFlow();
+        const locations = await Location.getForFlow();
+        const availableDates = appointmentService.generateAvailableDates(15);
+
+        const flowActionPayload = {
+            screen: 'APPOINTMENT',
+            data: {
+                services: services,
+                locations: locations,
+                available_dates: availableDates,
+                business_info: {
+                    name: 'Joyería Rimer',
+                    phone: process.env.WHATSAPP_PHONE_NUMBER_ID,
+                    hours: 'Lun-Sáb 9:00-18:00'
+                }
+            }
+        };
+
+        console.log('📦 Datos sincronizados con MongoDB:', {
+            servicios: services.length,
+            ubicaciones: locations.length,
+            fechas: availableDates.length
+        });
+
+        await whatsapp.sendFlowMessage(
+            to,
+            flowId,
+            'Appointment',
+            'APPOINTMENT',
+            '📅 Agendar tu Cita',
+            aiResponse || '¡Perfecto! Te ayudo a agendar tu cita. Completa la información:',
+            flowActionPayload
+        );
+
+        console.log('✅ Flow de agendamiento enviado con datos sincronizados desde MongoDB');
+        
+    } catch (error) {
+        console.error('❌ Error enviando Flow de agendamiento:', error);
+        
+        // Fallback con datos básicos si falla MongoDB
+        try {
+            const fallbackData = {
+                screen: 'APPOINTMENT',
+                data: {
+                    services: [
+                        { id: 'consulta', name: 'Consulta General', duration: '30 min' }
+                    ],
+                    locations: [
+                        { id: 'cartagena', name: 'Cartagena', address: 'Centro Histórico' }
+                    ],
+                    available_dates: [
+                        { date: '2025-09-25', displayDate: 'Mañana, 25 de septiembre' }
+                    ]
+                }
+            };
+            
+            await whatsapp.sendFlowMessage(to, flowId, 'Appointment', 'APPOINTMENT', 
+                '📅 Agendar Cita', 'Sistema básico de citas disponible:', fallbackData);
+            console.log('⚠️ Flow enviado con datos de fallback');
+            
+        } catch (fallbackError) {
+            console.error('❌ Error crítico con fallback:', fallbackError);
+            await whatsapp.sendTextMessage(to, 'Hubo un problema con el sistema de citas. Por favor, escríbeme qué día y hora prefieres y te ayudo manualmente.');
+        }
+    }
+}
+
+/**
+ * Envía un menú interactivo de categorías de productos.
+ * @param {string} to - El número de teléfono del destinatario.
+ * @param {string} messageText - Texto personalizado del mensaje.
+ */
+async function sendCategoryMenu(to, messageText) {
+    try {
+        const categoryButtons = [
+            { id: 'category_anillos', title: '💍 Anillos' },
+            { id: 'category_cadenas', title: '📿 Cadenas' },
+            { id: 'category_aretes', title: '💎 Aretes' },
+            { id: 'category_pulseras', title: '⛓️ Pulseras' },
+            { id: 'promociones', title: '🔥 Promociones' },
+            { id: 'schedule_appointment', title: '📅 Agendar Cita' }
+        ];
+
+        await whatsapp.sendInteractiveMessage(
+            to,
+            messageText || '¡Perfecto! Aquí está nuestro catálogo de joyas 💎\n\nSelecciona la categoría que más te interese:',
+            'Selecciona una opción',
+            categoryButtons
+        );
+
+        console.log('📋 Menú de categorías enviado');
+    } catch (error) {
+        console.error("❌ Error enviando menú de categorías:", error);
+        await whatsapp.sendTextMessage(to, "Tenemos anillos 💍, cadenas 📿, aretes 💎 y pulseras ⛓️. ¿Qué te interesa ver?");
     }
 }
 
@@ -245,14 +393,21 @@ async function handleProductSelection(to, productId) {
         if (customer) {
             const session = await ChatSession.findOne({ customer: customer._id, status: 'open' });
             if (session) {
-                session.context.lastSeenProduct = product._id;
+                // Asegurar que aiContext existe
+                if (!session.aiContext) {
+                    session.aiContext = {};
+                }
+                session.aiContext.lastSeenProduct = product._id;
+                session.markModified('aiContext');
                 await session.save();
             }
         }
 
         const priceString = product.maxPrice ? `Desde $${product.minPrice} hasta $${product.maxPrice}` : `Precio: $${product.minPrice}`;
+        const materialInfo = product.material || 'Material premium';
+        const gemInfo = product.gem || 'Sin gema';
 
-        await whatsapp.sendImageMessage(to, product.imageUrl, `${product.name}\n\nMaterial: ${product.material}\nGema: ${product.gem}\n${priceString}\n\n${product.description}`);
+        await whatsapp.sendImageMessage(to, product.imageUrl, `${product.name}\n\nMaterial: ${materialInfo}\nGema: ${gemInfo}\n${priceString}\n\n${product.description}`);
 
     } catch (error) {
         console.error("❌ Error en handleProductSelection:", error);
@@ -363,76 +518,18 @@ async function handleTermsAcceptance(to) {
         
         console.log(`✅ Términos aceptados para cliente: ${to}`);
         
-        console.log("🌟 Enviando mensaje interactivo para iniciar el Flow de Bienvenida...");
-        
-        if (process.env.DISABLE_FLOWS === 'true') {
-            // Modo sin flows - mensaje de texto
-            await whatsapp.sendTextMessage(to, 
-                "¡Perfecto! Bienvenido a Joyería Rimer. 💎✨\n\n" +
-                "Somos especialistas en joyería fina artesanal.\n\n" +
-                "Para comenzar, ¿podrías decirme tu nombre?"
-            );
-        } else {
-            // Enviar el Flow de bienvenida (solo informativo)
-            await whatsapp.sendInteractiveFlowButton(
-                to,
-                "¡Bienvenido a Joyería Rimer! 💎\n\nToca el botón para ver nuestro mensaje de bienvenida.",
-                "Ver Bienvenida",
-                process.env.WHATSAPP_FLOW_WELCOME_ID || "1520596295787894",
-            );
+        // Enviar mensaje de bienvenida personalizado
+        const welcomeMessage = "¡Perfecto! Bienvenido a Joyería Rimer. 💎✨\n\n" +
+            "Soy tu asistente virtual y estoy aquí para ayudarte a encontrar la joya perfecta.\n\n" +
+            "Para comenzar, ¿podrías decirme tu nombre?";
             
-            // Después del flow, pedimos el nombre primero
-            await whatsapp.sendTextMessage(
-                to,
-                "¡Perfecto! Para ofrecerte una atención personalizada...\n\n¿Cuál es tu nombre? 😊"
-            );
-        }
+        await whatsapp.sendTextMessage(to, welcomeMessage);
         
         return customer; // ← IMPORTANTE: Retornar el customer actualizado
     } catch (error) {
         console.error("❌ Error al procesar aceptación de términos:", error);
         await whatsapp.sendTextMessage(to, "Hubo un problema al procesar tu aceptación. Por favor, intenta nuevamente.");
         return null;
-    }
-}
-
-/**
- * Limpia todos los datos de un usuario específico (para testing)
- * @param {string} phoneNumber - El número de teléfono del usuario a limpiar
- */
-async function cleanUserData(phoneNumber) {
-    try {
-        console.log(`🧹 Limpiando datos del usuario: ${phoneNumber}`);
-        
-        // Buscar el cliente
-        const customer = await Customer.findOne({ phone: phoneNumber });
-        if (!customer) {
-            console.log(`⚠️ Usuario ${phoneNumber} no encontrado en la base de datos.`);
-            return { success: true, message: 'Usuario no encontrado (ya limpio)' };
-        }
-
-        // Eliminar sesiones de chat
-        const sessions = await ChatSession.find({ customer: customer._id });
-        const sessionIds = sessions.map(s => s._id);
-        
-        // Eliminar logs de mensajes
-        await MessageLog.deleteMany({ session: { $in: sessionIds } });
-        console.log(`🗑️ Eliminados logs de mensajes para ${phoneNumber}`);
-        
-        // Eliminar sesiones
-        await ChatSession.deleteMany({ customer: customer._id });
-        console.log(`🗑️ Eliminadas sesiones de chat para ${phoneNumber}`);
-        
-        // Eliminar cliente
-        await Customer.deleteOne({ _id: customer._id });
-        console.log(`🗑️ Eliminado cliente ${phoneNumber}`);
-        
-        console.log(`✅ Datos limpiados correctamente para ${phoneNumber}`);
-        return { success: true, message: 'Datos limpiados correctamente' };
-        
-    } catch (error) {
-        console.error(`❌ Error limpiando datos de ${phoneNumber}:`, error);
-        return { success: false, error: error.message };
     }
 }
 
@@ -445,161 +542,9 @@ function getModel() {
 }
 
 // EXPORTACIONES al final del archivo:
-/**
- * Maneja la selección de categorías desde botones interactivos.
- */
-async function handleCategorySelection(to, categoryButtonId) {
-    try {
-        console.log(`🏷️ Procesando selección de categoría: ${categoryButtonId}`);
-        
-        const categoryMap = {
-            'cat_anillos': 'anillos',
-            'cat_cadenas': 'cadenas',
-            'cat_aretes': 'aretes'
-        };
-        
-        const category = categoryMap[categoryButtonId];
-        if (category) {
-            await whatsapp.sendCategoryProducts(to, category);
-        } else {
-            await whatsapp.sendTextMessage(to, "🤔 No pude procesar esa categoría. ¿Puedes intentar de nuevo?");
-        }
-        
-    } catch (error) {
-        console.error("❌ Error manejando selección de categoría:", error);
-        await whatsapp.sendTextMessage(to, "Hubo un problema procesando tu selección. ¿Puedes intentar nuevamente?");
-    }
-}
-
-/**
- * Maneja la solicitud de detalles de un producto específico.
- */
-async function handleProductDetailRequest(to, productButtonId) {
-    try {
-        console.log(`📦 Mostrando detalles del producto: ${productButtonId}`);
-        
-        await whatsapp.sendProductDetail(to, productButtonId);
-        
-    } catch (error) {
-        console.error("❌ Error mostrando detalles del producto:", error);
-        await whatsapp.sendTextMessage(to, "Hubo un problema mostrando los detalles. ¿Puedes intentar nuevamente?");
-    }
-}
-
-/**
- * Maneja las acciones finales de productos (Cotizar, Agendar, Ver Más).
- */
-async function handleProductAction(to, actionId) {
-    try {
-        console.log(`⚡ Procesando acción: ${actionId}`);
-        
-        switch(actionId) {
-            case 'cotizar_producto':
-                await whatsapp.sendTextMessage(to, 
-                    "💰 ¡Perfecto! Para enviarte una cotización personalizada necesito algunos datos:\n\n" +
-                    "📱 Nombre completo\n📍 Ciudad\n💍 Producto de interés\n💎 Preferencias especiales\n\n" +
-                    "¿Te parece si agendamos una cita para darte atención personalizada?"
-                );
-                break;
-                
-            case 'agendar_cita':
-                const FlowService = require('../services/flowService');
-                
-                // Enviar botón para iniciar el flow de citas
-                const appointmentButton = FlowService.createAppointmentButton(
-                    to, 
-                    "Te ayudo a agendar tu cita de manera rápida y sencilla usando nuestro formulario interactivo:"
-                );
-                
-                const { sendWhatsAppMessage } = require('../services/whatsappService');
-                await sendWhatsAppMessage(to, appointmentButton);
-                break;
-                
-            case 'ver_mas_productos':
-                await whatsapp.sendCategoriesMessage(to);
-                break;
-                
-            default:
-                await whatsapp.sendTextMessage(to, "🤔 No reconozco esa opción. ¿Puedes elegir una de las opciones disponibles?");
-        }
-        
-    } catch (error) {
-        console.error("❌ Error procesando acción del producto:", error);
-        await whatsapp.sendTextMessage(to, "Hubo un problema procesando tu solicitud. ¿Puedes intentar nuevamente?");
-    }
-}
-
-/**
- * 📅 Envía el Flow de citas dinámico al usuario
- * @param {string} to - Número de teléfono del usuario
- */
-async function sendAppointmentFlow(to) {
-    try {
-        console.log(`📅 Enviando Flow de citas dinámico a ${to}`);
-        
-        // Mensaje de Flow con el ID del Flow de citas
-        const flowMessage = {
-            messaging_product: "whatsapp",
-            recipient_type: "individual",
-            to: to,
-            type: "interactive",
-            interactive: {
-                type: "flow",
-                header: {
-                    type: "text",
-                    text: "Agenda tu Cita ✨"
-                },
-                body: {
-                    text: "Te voy a ayudar a agendar tu cita de manera rápida y sencilla. Solo necesito algunos datos:"
-                },
-                footer: {
-                    text: "Joyería Rimer - Cartagena y Santa Marta"
-                },
-                action: {
-                    name: "flow",
-                    parameters: {
-                        flow_message_version: "3",
-                        flow_token: `appointment_${Date.now()}_${to.replace('+', '')}`,
-                        flow_id: "24509326838732458",
-                        flow_cta: "Agendar Cita",
-                        flow_action: "navigate",
-                        flow_action_payload: {
-                            screen: "APPOINTMENT",
-                            data: {}
-                        }
-                    }
-                }
-            }
-        };
-
-        await whatsapp.sendMessageAPI(flowMessage);
-        console.log('✅ Flow de citas enviado exitosamente');
-        
-    } catch (error) {
-        console.error('❌ Error enviando Flow de citas:', error);
-        
-        // Fallback: mensaje con botón simple si el Flow falla
-        await whatsapp.sendTextMessage(to, 
-            "📅 *¡Agenda tu Cita!*\n\n" +
-            "Para agendar tu cita, por favor contáctanos:\n\n" +
-            "📞 **Cartagena**: +57 300 123 4567\n" +
-            "📞 **Santa Marta**: +57 300 123 4568\n\n" +
-            "O escríbeme los detalles de tu cita y te ayudo a coordinarla."
-        );
-    }
-}
-
 module.exports = {
     handleSmartReply,
     handleProductSelection,
     handleTermsAcceptance,
-    handleCategorySelection,
-    handleProductDetailRequest,
-    handleProductAction,
-    cleanUserData,
-    getModel,
-    sendAppointmentFlow,
-    Customer,
-    ChatSession,
-    MessageLog
+    getModel
 };
