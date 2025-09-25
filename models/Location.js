@@ -53,7 +53,7 @@ locationSchema.statics.getForFlow = async function() {
     const locations = await this.find({ active: true }).select('id flowDisplayName address -_id');
     return locations.map(location => ({
         id: location.id,
-        name: location.flowDisplayName,
+        title: location.flowDisplayName, // ✅ CORREGIDO: title en lugar de name
         address: location.address
     }));
 };

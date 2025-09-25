@@ -46,7 +46,7 @@ serviceSchema.statics.getForFlow = async function() {
     const services = await this.find({ active: true }).select('id flowDisplayName duration -_id');
     return services.map(service => ({
         id: service.id,
-        name: service.flowDisplayName,
+        title: service.flowDisplayName, // ✅ CORREGIDO: title en lugar de name
         duration: `${service.duration} min`
     }));
 };
