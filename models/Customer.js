@@ -1,9 +1,5 @@
 const mongoose = require('mongoose');
 
-/**
- * Esquema del cliente
- * Almacena información del cliente, preferencias y score de lead
- */
 const customerSchema = new mongoose.Schema({
   name: String,
   phone: { type: String, required: true, unique: true, index: true },

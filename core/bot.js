@@ -11,7 +11,7 @@ const Product = require('../models/Product');
 // --- CONFIGURACIÓN E INICIALIZACIÓN DEL LLM ---
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
 
 // --- IMPORTACIÓN DE MODELOS ---
 
@@ -278,28 +278,60 @@ async function sendAppointmentFlow(to, aiResponse) {
         const Location = require('../models/Location');
         
         // Obtener servicios y ubicaciones desde MongoDB
-        const services = await Service.getForFlow();
-        const locations = await Location.getForFlow();
-        const availableDates = appointmentService.generateAvailableDates(15);
+        const services = await Service.find({ active: true });
+        const locations = await Location.find({ active: true });
+        const availableDates = appointmentService.generateAvailableDates(7); // Solo 7 días
+
+        // Transformar servicios a formato del Flow (department)
+        const department = services.map(service => ({
+            id: service.id,
+            title: `💎 ${service.name}`
+        }));
+
+        // Transformar ubicaciones a formato del Flow
+        const location = locations.map(loc => ({
+            id: loc.id,
+            title: `📍 ${loc.name}`
+        }));
+
+        // Transformar fechas a formato del Flow
+        const date = availableDates.slice(0, 5).map(dateItem => ({
+            id: dateItem.date,
+            title: dateItem.displayDate
+        }));
+
+        // Generar horarios disponibles
+        const time = [
+            { id: "09:00", title: "9:00 AM", enabled: true },
+            { id: "09:30", title: "9:30 AM", enabled: true },
+            { id: "10:00", title: "10:00 AM", enabled: true },
+            { id: "10:30", title: "10:30 AM", enabled: true },
+            { id: "11:00", title: "11:00 AM", enabled: true },
+            { id: "14:00", title: "2:00 PM", enabled: true },
+            { id: "14:30", title: "2:30 PM", enabled: true },
+            { id: "15:00", title: "3:00 PM", enabled: true },
+            { id: "15:30", title: "3:30 PM", enabled: true },
+            { id: "16:00", title: "4:00 PM", enabled: true }
+        ];
 
         const flowActionPayload = {
             screen: 'APPOINTMENT',
             data: {
-                services: services,
-                locations: locations,
-                available_dates: availableDates,
-                business_info: {
-                    name: 'Joyería Rimer',
-                    phone: process.env.WHATSAPP_PHONE_NUMBER_ID,
-                    hours: 'Lun-Sáb 9:00-18:00'
-                }
+                department: department,
+                location: location,
+                is_location_enabled: true,
+                date: date,
+                is_date_enabled: true,
+                time: time,
+                is_time_enabled: true
             }
         };
 
         console.log('📦 Datos sincronizados con MongoDB:', {
-            servicios: services.length,
-            ubicaciones: locations.length,
-            fechas: availableDates.length
+            servicios: department.length,
+            ubicaciones: location.length,
+            fechas: date.length,
+            horarios: time.length
         });
 
         await whatsapp.sendFlowMessage(
@@ -312,7 +344,7 @@ async function sendAppointmentFlow(to, aiResponse) {
             flowActionPayload
         );
 
-        console.log('✅ Flow de agendamiento enviado con datos sincronizados desde MongoDB');
+        console.log('✅ Flow de agendamiento enviado con estructura correcta del Flow');
         
     } catch (error) {
         console.error('❌ Error enviando Flow de agendamiento:', error);
@@ -322,21 +354,28 @@ async function sendAppointmentFlow(to, aiResponse) {
             const fallbackData = {
                 screen: 'APPOINTMENT',
                 data: {
-                    services: [
-                        { id: 'consulta', name: 'Consulta General', duration: '30 min' }
+                    department: [
+                        { id: 'consulta', title: '💎 Consulta General' }
                     ],
-                    locations: [
-                        { id: 'cartagena', name: 'Cartagena', address: 'Centro Histórico' }
+                    location: [
+                        { id: 'cartagena', title: '📍 Cartagena' }
                     ],
-                    available_dates: [
-                        { date: '2025-09-25', displayDate: 'Mañana, 25 de septiembre' }
-                    ]
+                    is_location_enabled: true,
+                    date: [
+                        { id: '2025-09-25', title: 'Mañana, 25 de septiembre' }
+                    ],
+                    is_date_enabled: true,
+                    time: [
+                        { id: "10:00", title: "10:00 AM", enabled: true },
+                        { id: "14:00", title: "2:00 PM", enabled: true }
+                    ],
+                    is_time_enabled: true
                 }
             };
             
             await whatsapp.sendFlowMessage(to, flowId, 'Appointment', 'APPOINTMENT', 
                 '📅 Agendar Cita', 'Sistema básico de citas disponible:', fallbackData);
-            console.log('⚠️ Flow enviado con datos de fallback');
+            console.log('⚠️ Flow enviado con datos de fallback en formato correcto');
             
         } catch (fallbackError) {
             console.error('❌ Error crítico con fallback:', fallbackError);

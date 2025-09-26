@@ -2,8 +2,8 @@ const crypto = require('crypto');
 const fs = require('fs');
 
 // Leer las claves
-const publicKey = fs.readFileSync('public_key.pem', 'utf8');
-const privateKey = fs.readFileSync('private_key.pem', 'utf8');
+const publicKey = fs.readFileSync('../public_key.pem', 'utf8');
+const privateKey = fs.readFileSync('../private_key.pem', 'utf8');
 
 console.log('🧪 Prueba de cifrado/descifrado WhatsApp Flow');
 
@@ -61,7 +61,7 @@ console.log(JSON.stringify(whatsappRequest, null, 2));
 console.log('\n🔓 Probando descifrado con nuestro código...');
 
 try {
-    const { decryptRequest } = require('./core/encryption.js');
+    const { decryptRequest } = require('../core/encryption.js');
     const result = decryptRequest(whatsappRequest, privateKey);
     
     console.log('✅ Descifrado exitoso!');

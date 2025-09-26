@@ -128,19 +128,43 @@ async function handleFlowDataExchange(decryptedBody) {
             console.log('✅ Procesando pantalla SUMMARY (confirmación final):', data);
             
             try {
-                // Guardar la cita en la base de datos
+                // Primero crear o encontrar el Customer
+                const Customer = require('../models/Customer');
+                let customer = await Customer.findOne({ phone: data.phone });
+                
+                if (!customer) {
+                    // Crear nuevo customer si no existe
+                    customer = new Customer({
+                        name: data.name,
+                        phone: data.phone,
+                        email: data.email,
+                        termsAcceptedAt: data.terms_accepted ? new Date() : null
+                    });
+                    await customer.save();
+                    console.log('✅ Nuevo customer creado:', customer._id);
+                } else {
+                    // Actualizar datos del customer existente si es necesario
+                    customer.name = data.name;
+                    customer.email = data.email;
+                    if (data.terms_accepted && !customer.termsAcceptedAt) {
+                        customer.termsAcceptedAt = new Date();
+                    }
+                    await customer.save();
+                    console.log('✅ Customer existente actualizado:', customer._id);
+                }
+                
+                // Crear la cita con los campos correctos del modelo
                 const appointmentData = {
+                    customer: customer._id, // ObjectId requerido
+                    dateTime: new Date(`${data.date}T${data.time}`), // Campo requerido
                     serviceId: data.department,
                     locationId: data.location,
-                    scheduledDate: new Date(`${data.date}T${data.time}`),
-                    customerName: data.name,
                     customerEmail: data.email,
-                    customerPhone: data.phone,
-                    notes: data.more_details || '',
+                    customerNotes: data.more_details || '',
                     status: 'confirmed',
                     termsAccepted: data.terms_accepted,
                     privacyAccepted: data.privacy_accepted,
-                    createdAt: new Date()
+                    consentDate: new Date()
                 };
                 
                 // Crear la cita en la base de datos
@@ -154,6 +178,41 @@ async function handleFlowDataExchange(decryptedBody) {
                     reference,
                     appointmentId: appointment._id
                 });
+                
+                // ENVIAR MENSAJE DE CONFIRMACIÓN POR WHATSAPP
+                try {
+                    const WhatsAppService = require('../services/whatsappService');
+                    const whatsappService = new WhatsAppService();
+                    
+                    // Formatear fecha en español
+                    const fechaFormateada = new Date(`${data.date}T${data.time}`).toLocaleDateString('es-ES', {
+                        weekday: 'long',
+                        year: 'numeric', 
+                        month: 'long',
+                        day: 'numeric'
+                    });
+                    
+                    const confirmationMessage = `🎉 *¡Cita confirmada exitosamente!*\n\n` +
+                        `📋 *Referencia:* ${reference}\n` +
+                        `💎 *Servicio:* ${data.department === 'consulta' ? 'Consulta General' : data.department}\n` +
+                        `📍 *Sede:* ${data.location === 'cartagena' ? 'Cartagena' : data.location}\n` +
+                        `📅 *Fecha:* ${fechaFormateada}\n` +
+                        `🕒 *Hora:* ${data.time}\n\n` +
+                        `👤 *Datos del cliente:*\n` +
+                        `• Nombre: ${data.name}\n` +
+                        `• Email: ${data.email}\n` +
+                        `• Teléfono: ${data.phone}\n` +
+                        `${data.more_details ? `• Detalles: ${data.more_details}\n` : ''}` +
+                        `\n✨ Te esperamos en nuestra joyería. ¡Gracias por confiar en nosotros!`;
+                    
+                    // Enviar mensaje al usuario usando su teléfono
+                    await whatsappService.sendTextMessage(data.phone, confirmationMessage);
+                    console.log('✅ Mensaje de confirmación enviado al WhatsApp:', data.phone);
+                    
+                } catch (msgError) {
+                    console.error('❌ Error enviando mensaje de confirmación:', msgError);
+                    // No fallar el Flow si el mensaje no se envía
+                }
                 
                 // Navegar a pantalla SUCCESS
                 return {
@@ -205,15 +264,11 @@ async function processWebhook(body) {
     // Si el body contiene los campos de cifrado, es una solicitud de un Flow.
     if (body.encrypted_flow_data && body.encrypted_aes_key && body.initial_vector) {
         console.log('🔄 Detectada solicitud de Flow cifrada.');
-        const privateKey = process.env.WHATSAPP_FLOW_PRIVATE_KEY;
-        if (!privateKey) {
-            console.error('❌ Falta la variable de entorno WHATSAPP_FLOW_PRIVATE_KEY.');
-            return; // No podemos hacer nada sin la clave.
-        }
-
+        
         try {
             const privateKey = getPrivateKey();
-            const { decryptedBody, aesKeyBuffer, initialVectorBuffer } = decryptRequest(body, privateKey);
+            const passphrase = process.env.WHATSAPP_FLOW_PRIVATE_KEY_PASSPHRASE || '';
+            const { decryptedBody, aesKeyBuffer, initialVectorBuffer } = decryptRequest(body, privateKey, passphrase);
             console.log('✅ Flow descifrado:', JSON.stringify(decryptedBody, null, 2));
             
             // --- Lógica del Flow ---
@@ -236,7 +291,11 @@ async function processWebhook(body) {
                 response = { data: { acknowledged: true } };
             }
             
-            return encryptResponse(response, aesKeyBuffer, initialVectorBuffer);
+            console.log('🔐 Cifrando respuesta:', JSON.stringify(response, null, 2));
+            const encryptedResponse = encryptResponse(response, aesKeyBuffer, initialVectorBuffer);
+            console.log('✅ Respuesta cifrada generada, longitud:', encryptedResponse.length, 'caracteres');
+            console.log('🔍 Inicio de respuesta cifrada:', encryptedResponse.substring(0, 50) + '...');
+            return encryptedResponse;
         } catch (error) {
             console.error('❌ Error en el procesamiento del Flow cifrado:', error);
             // Si hay un error de descifrado, FlowEndpointException ya tiene el código de estado correcto.

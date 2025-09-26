@@ -1,15 +1,11 @@
 const mongoose = require('mongoose');
 
-/**
- * Esquema de log de mensajes
- * Almacena el historial completo de mensajes de cada sesión
- */
 const messageLogSchema = new mongoose.Schema({
   session: { type: mongoose.Schema.Types.ObjectId, ref: 'ChatSession', index: true },
   direction: { type: String, enum: ['inbound','outbound'], required: true },
-  whatsappMessageId: { type: String, unique: true, sparse: true }, // prevenir duplicados
+  whatsappMessageId: { type: String, unique: true, sparse: true },
   text: String,
-  payload: mongoose.Schema.Types.Mixed, // botones, templates, media metadata
+  payload: mongoose.Schema.Types.Mixed,
   provider: { type: String, default: 'meta' },
   createdAt: { type: Date, default: Date.now }
 }, { timestamps: false });

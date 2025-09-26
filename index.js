@@ -7,6 +7,7 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const { processWebhook } = require('./core/webhookHandler.js'); // Importamos el nuevo manejador
+const { FlowEndpointException } = require('./core/encryption.js'); // Para manejar errores de Flow
 
 // --- CONFIGURACIÓN ---
 const PORT = process.env.PORT || 1337;
@@ -57,7 +58,15 @@ app.post('/webhook', async (req, res) => {
         }
     } catch (error) {
         console.error('Error procesando el webhook:', error);
-        res.sendStatus(500);
+        
+        // Si es un error de descifrado (FlowEndpointException), usar el código de estado específico
+        if (error.name === 'FlowEndpointException' && error.statusCode) {
+            console.log(`🔒 Enviando código de estado ${error.statusCode} para error de descifrado`);
+            res.sendStatus(error.statusCode);
+        } else {
+            // Para otros errores, usar 500
+            res.sendStatus(500);
+        }
     }
 });
 
@@ -72,15 +81,26 @@ app.post('/webhook/appointment-flow', async (req, res) => {
         if (responsePayload) {
             // Respuesta cifrada de Flow
             console.log('✅ Enviando respuesta cifrada del Flow');
+            console.log('📏 Longitud de respuesta cifrada:', responsePayload.length, 'caracteres');
+            console.log('🔍 Inicio de respuesta:', responsePayload.substring(0, 50) + '...');
             res.status(200).send(responsePayload);
         } else {
-            // Respuesta básica
-            console.log('✅ Enviando respuesta básica del Flow');
+            // Respuesta básica - ESTO NO DEBERÍA PASAR CON FLOWS
+            console.log('⚠️ ADVERTENCIA: Enviando respuesta básica del Flow - responsePayload es null/undefined');
+            console.log('🐛 Esto indica un error en processWebhook()');
             res.sendStatus(200);
         }
     } catch (error) {
         console.error('❌ Error procesando Flow de citas:', error);
-        res.sendStatus(500);
+        
+        // Si es un error de descifrado (FlowEndpointException), usar el código de estado específico
+        if (error.name === 'FlowEndpointException' && error.statusCode) {
+            console.log(`🔒 Enviando código de estado ${error.statusCode} para error de descifrado`);
+            res.sendStatus(error.statusCode);
+        } else {
+            // Para otros errores, usar 500
+            res.sendStatus(500);
+        }
     }
 });
 

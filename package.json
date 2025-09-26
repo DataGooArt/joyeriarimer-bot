@@ -4,21 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node index.js",
-    "chat": "node tests/local-chat.js",
-    "setup": "node add-products.js",
-    "test": "node tests/test-complete-flow.js",
-    "test:appointment": "node tests/test-appointment-flow.js",
-    "test:encryption": "node tests/test-encryption.js",
-    "validate": "node tests/verificar-configuracion.js",
-    "dashboard": "node tools/appointment-dashboard.js",
-    "dashboard:pending": "node tools/appointment-dashboard.js pending",
-    "dashboard:stats": "node tools/appointment-dashboard.js stats",
-    "dashboard:today": "node tools/appointment-dashboard.js today",
-    "docker:local": "docker-compose -f docker-compose.local.yml up --build",
-    "docker:prod": "docker-compose up --build -d",
-    "docker:test": "docker-compose -f docker-compose.test.yml up --build"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "Art Comunicaciones",
@@ -31,7 +17,6 @@
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "facebook-nodejs-business-sdk": "^23.0.1",
-    "mongoose": "^8.18.1",
-    "node-cron": "^3.0.3"
+    "mongoose": "^8.18.1"
   }
 }

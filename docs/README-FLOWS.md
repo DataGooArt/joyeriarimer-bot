@@ -1,34 +1,15 @@
-# � WhatsApp Flows - Sistema de Citas IA para Joyería Rimer
+# 🚀 WhatsApp Flows - Configuración de Endpoint Cifrado
 
-## 📋 Resumen del Sistema
+## 📋 Resumen Rápido
 
-Sistema completo de **citas automatizado** que combina **IA conversacional** con **WhatsApp Flows interactivos**. La IA detecta automáticamente cuando un usuario quiere agendar una cita y activa el Flow correspondiente.
+Este proyecto implementa un endpoint completamente funcional para **WhatsApp Flows** con cifrado end-to-end usando **RSA-2048** + **AES-128-GCM**, validado exitosamente por Meta.
 
-## 🎯 Flow de Citas Implementado
-- ✅ **Flow ID: 24509326838732458** (Validado por Meta)
-- ✅ **Detección automática de intenciones** con Gemini AI
-- ✅ **Activación sin intervención manual**
-- ✅ **Cifrado RSA-2048 + AES-128-GCM**
-- ✅ **Notificaciones automáticas** con confirmaciones
-- ✅ **Ubicaciones:** Cartagena y Santa Marta
-- ✅ **Servicios:** Cotizaciones, Reparaciones, Diseño personalizado
-
-## 🤖 Funcionamiento de la IA
-
-### Detección Automática
-La IA detecta palabras clave como:
-- "cita", "appointment", "agendar"
-- "reservar", "disponibilidad"
-- "horario", "cuando pueden atenderme"
-
-### Activación del Flow
-```javascript
-// En core/bot.js
-if (intent === 'schedule_appointment') {
-    await sendAppointmentFlow(sender);
-    // Activa Flow ID 24509326838732458 automáticamente
-}
-```
+## 🎯 Estado Actual
+- ✅ **Endpoint validado por Meta**
+- ✅ **Cifrado RSA-OAEP + AES-GCM funcionando**
+- ✅ **Claves RSA 2048-bit generadas y configuradas**
+- ✅ **Respuesta correcta a ping de validación**
+- ✅ **Infraestructura en producción**
 
 ## 🔧 Verificación Rápida
 
