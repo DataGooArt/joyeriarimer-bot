@@ -160,4 +160,80 @@ Si ves estos logs durante la validación de Meta:
 
 ---
 
-**Desarrollado con ❤️ para WhatsApp Business API**
+## 🗓️ Actualización: Flujo de Citas con WhatsApp Flows (v2.8.9)
+
+### Cambios y Mejoras Recientes
+
+- **Confirmación de Citas:**
+  - El sistema ahora envía el mensaje de confirmación de cita siempre al número de WhatsApp que inició la conversación (no al número que el usuario escribe manualmente en el formulario).
+  - Esto garantiza que la confirmación llegue al usuario correcto y evita errores por números mal escritos.
+
+- **Validación de Email:**
+  - Se agregó validación de formato de email en la pantalla de datos personales (DETAILS). Si el email no es válido, el usuario no puede avanzar.
+
+- **Flujo de Pantallas:**
+  - El flujo sigue la secuencia: `APPOINTMENT → DETAILS → SUMMARY → SUCCESS`.
+  - El mensaje de confirmación se envía justo al confirmar en la pantalla SUMMARY, antes de mostrar SUCCESS.
+
+- **Persistencia y Seguridad:**
+  - El número de WhatsApp original se pasa de forma segura usando el `flow_token` en todo el proceso.
+  - Los datos de la cita y del cliente se almacenan correctamente en MongoDB, siempre usando el número de WhatsApp real.
+
+### Ejemplo de Experiencia para el Usuario
+
+1. El usuario inicia el Flow desde WhatsApp.
+2. Completa los datos de la cita y sus datos personales.
+3. Al confirmar, recibe inmediatamente un mensaje de WhatsApp con los detalles y referencia de la cita.
+4. El sistema valida el email y nunca envía confirmaciones a números distintos al de la conversación.
+
+### Archivos Clave Modificados
+- `core/webhookHandler.js` (manejo de número y validación email)
+- `core/bot.js` (paso de número original como flow_token)
+- `api/whatsapp.js` (soporte para flow_token)
+
+---
+
+**Esta actualización mejora la confiabilidad y experiencia del usuario en el agendamiento de citas por WhatsApp Flows.**
+
+---
+
+## ⚙️ Configuración Específica del Flujo de Citas
+
+### 1. Activación del Flow
+- El Flow de citas se activa automáticamente cuando el usuario solicita agendar una cita o usa palabras clave como "agendar", "cita", "consultar cita".
+- El bot envía el Flow interactivo usando el ID configurado en la variable de entorno `WHATSAPP_FLOW_APPOINTMENT_ID`.
+
+### 2. Estructura del Flow
+- El flujo sigue la secuencia: `APPOINTMENT → DETAILS → SUMMARY → SUCCESS`.
+- Cada pantalla recopila información clave:
+  - **APPOINTMENT:** Servicio, sede, fecha y hora.
+  - **DETAILS:** Nombre, email (validado), teléfono (prellenado con el número de WhatsApp), detalles adicionales.
+  - **SUMMARY:** Resumen y confirmación de términos y privacidad.
+  - **SUCCESS:** Mensaje de éxito y detalles de la cita.
+
+### 3. Seguridad y Persistencia
+- El número de WhatsApp original se pasa como `flow_token` y se usa en todo el proceso, garantizando que la confirmación llegue al usuario correcto.
+- Todos los datos se almacenan en MongoDB, asociando la cita al número real de WhatsApp.
+
+### 4. Validaciones
+- El email es validado con una expresión regular antes de permitir la confirmación.
+- El teléfono mostrado y usado para notificaciones siempre es el de la conversación de WhatsApp.
+
+### 5. Variables de Entorno Clave
+
+```env
+WHATSAPP_FLOW_APPOINTMENT_ID=...   # ID del Flow de agendamiento en Meta
+WHATSAPP_FLOW_PRIVATE_KEY_B64=...  # Clave privada en base64 para descifrado
+WHATSAPP_TOKEN=...                 # Token de acceso API WhatsApp
+WHATSAPP_PHONE_NUMBER_ID=...       # ID del número de WhatsApp
+MONGO_URI=...                      # Cadena de conexión MongoDB
+```
+
+> **Nota:** No expongas nunca tus claves privadas ni tokens en documentación pública.
+
+> **Privacidad:**
+> - El sistema nunca expone datos personales sensibles en logs ni en la documentación.
+> - Los ejemplos y mensajes de confirmación solo muestran información genérica (servicio, sede, fecha, hora, referencia).
+> - Los datos personales reales (nombre, email, teléfono) solo se usan internamente para la gestión de la cita y nunca se comparten ni se muestran públicamente.
+
+---
