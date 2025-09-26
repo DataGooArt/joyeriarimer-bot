@@ -1,3 +1,42 @@
+
+services:
+  joyeria-rimer-bot:
+    image: racuello/joyeria-rimer-bot:2.8.9
+    environment:
+      - MONGO_URI=mongodb://<usuario>:<password>@<host>:<port>/<dbname>?ssl=true&replicaSet=<replica>&authSource=admin&retryWrites=true&w=majority&appName=<appname>
+      - GEMINI_API_KEY=your-gemini-api-key
+      - WHATSAPP_TOKEN=your-whatsapp-token
+      - VERIFY_TOKEN=your-verify-token
+      - WEBHOOK_VERIFY_TOKEN=your-webhook-verify-token
+      - WHATSAPP_PHONE_NUMBER_ID=your-phone-number-id
+      - WHATSAPP_FLOW_WELCOME_ID=your-flow-welcome-id
+      - WHATSAPP_FLOW_APPOINTMENT_ID=your-flow-appointment-id
+      - WHATSAPP_FLOW_TEMPLATE_NAMESPACE=your-template-namespace
+      - WELCOME_TEMPLATE_HEADER_IMAGE_URL=https://your-image-url.com/image.png
+      - WHATSAPP_FLOW_PRIVATE_KEY_B64=your-private-key-b64
+      - PORT=1337
+      - NODE_ENV=production
+      - DISABLE_FLOWS=false
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - joyeria_public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.joyeria-bot-http.rule=Host(`your-domain.com`)"
+      - "traefik.http.routers.joyeria-bot-http.entrypoints=web"
+      - "traefik.http.routers.joyeria-bot-http.middlewares=https-redirect@file"
+      - "traefik.http.routers.joyeria-bot-https.rule=Host(`your-domain.com`)"
+      - "traefik.http.routers.joyeria-bot-https.entrypoints=websecure"
+      - "traefik.http.routers.joyeria-bot-https.tls=true"
+      - "traefik.http.routers.joyeria-bot-https.tls.certresolver=letsencryptresolver"
+      - "traefik.http.services.joyeria-bot.loadbalancer.server.port=1337"
+
+networks:
+  joyeria_public:
+    external: true
 services:
   joyeria-rimer-bot:
     image: racuello/joyeria-rimer-bot:latest
