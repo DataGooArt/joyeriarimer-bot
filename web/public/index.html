@@ -360,16 +360,24 @@
 
             appointments.forEach(appointment => {
                 const statusClass = `status-${appointment.status}`;
-                const date = new Date(appointment.appointmentDate).toLocaleDateString('es-ES');
-                
+                // Usar dateTime para fecha y hora
+                const dateObj = new Date(appointment.dateTime);
+                const date = dateObj.toLocaleDateString('es-ES');
+                const time = dateObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                // Usar customer, service, location poblados
+                const customerName = appointment.customer?.name || '-';
+                const customerPhone = appointment.customer?.phone || '-';
+                const serviceName = appointment.service?.name || appointment.serviceId || '-';
+                const locationName = appointment.location?.name || appointment.locationId || '-';
+
                 html += `
                     <tr>
-                        <td><strong>${appointment.customerName}</strong></td>
+                        <td><strong>${customerName}</strong></td>
                         <td>${date}</td>
-                        <td>${appointment.appointmentTime}</td>
-                        <td>${appointment.serviceType || 'Consulta general'}</td>
+                        <td>${time}</td>
+                        <td>${serviceName}</td>
                         <td><span class="status-badge ${statusClass}">${appointment.status}</span></td>
-                        <td>${appointment.customerPhone}</td>
+                        <td>${customerPhone}</td>
                         <td>
                             <select onchange="updateStatus('${appointment._id}', this.value)" class="btn btn-secondary">
                                 <option value="">Cambiar estado</option>
