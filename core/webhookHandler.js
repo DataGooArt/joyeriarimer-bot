@@ -13,7 +13,7 @@ const Appointment = require('../models/Appointment');
  * @returns {object} - Respuesta para el Flow
  */
 async function handleFlowDataExchange(decryptedBody) {
-    const { screen, data, action } = decryptedBody;
+    const { screen, data, action, flow_token } = decryptedBody;
     
     console.log(`🔄 Procesando pantalla del Flow: ${screen}, action: ${action}`, data);
     
@@ -91,8 +91,26 @@ async function handleFlowDataExchange(decryptedBody) {
                 // Crear texto de resumen para la cita
                 const appointmentSummary = `💎 ${service?.flowDisplayName || service?.name}\n📍 ${location?.flowDisplayName || location?.name}\n📅 ${formattedDate}\n🕒 ${timeFormatted}`;
                 
+                // Usar el número de WhatsApp original (flow_token) en lugar del que escribió el usuario
+                const actualPhone = flow_token || data.phone;
+                
+                // Validar email con regex básica
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(data.email)) {
+                    return {
+                        screen: 'DETAILS',
+                        data: {
+                            error_msg: 'Por favor ingresa un email válido (ejemplo: nombre@correo.com)',
+                            department: data.department,
+                            location: data.location,
+                            date: data.date,
+                            time: data.time
+                        }
+                    };
+                }
+                
                 // Crear texto de resumen para los datos del cliente
-                const detailsSummary = `👤 ${data.name}\n📧 ${data.email}\n📱 ${data.phone}${data.more_details ? '\n📝 ' + data.more_details : ''}`;
+                const detailsSummary = `👤 ${data.name}\n📧 ${data.email}\n📱 ${actualPhone}${data.more_details ? '\n📝 ' + data.more_details : ''}`;
                 
                 console.log('✅ Navegando hacia SUMMARY con datos completos');
                 
@@ -107,7 +125,7 @@ async function handleFlowDataExchange(decryptedBody) {
                         time: data.time,
                         name: data.name,
                         email: data.email,
-                        phone: data.phone,
+                        phone: actualPhone,
                         more_details: data.more_details || '',
                         terms_accepted: false,
                         privacy_accepted: false
@@ -128,15 +146,18 @@ async function handleFlowDataExchange(decryptedBody) {
             console.log('✅ Procesando pantalla SUMMARY (confirmación final):', data);
             
             try {
+                // Usar el número de WhatsApp original (flow_token) siempre
+                const actualPhone = flow_token || data.phone;
+                
                 // Primero crear o encontrar el Customer
                 const Customer = require('../models/Customer');
-                let customer = await Customer.findOne({ phone: data.phone });
+                let customer = await Customer.findOne({ phone: actualPhone });
                 
                 if (!customer) {
                     // Crear nuevo customer si no existe
                     customer = new Customer({
                         name: data.name,
-                        phone: data.phone,
+                        phone: actualPhone,
                         email: data.email,
                         termsAcceptedAt: data.terms_accepted ? new Date() : null
                     });
@@ -181,8 +202,7 @@ async function handleFlowDataExchange(decryptedBody) {
                 
                 // ENVIAR MENSAJE DE CONFIRMACIÓN POR WHATSAPP
                 try {
-                    const WhatsAppService = require('../services/whatsappService');
-                    const whatsappService = new WhatsAppService();
+                    const { whatsappService } = require('../services/whatsappService');
                     
                     // Formatear fecha en español
                     const fechaFormateada = new Date(`${data.date}T${data.time}`).toLocaleDateString('es-ES', {
@@ -201,13 +221,14 @@ async function handleFlowDataExchange(decryptedBody) {
                         `👤 *Datos del cliente:*\n` +
                         `• Nombre: ${data.name}\n` +
                         `• Email: ${data.email}\n` +
-                        `• Teléfono: ${data.phone}\n` +
+                        `• Teléfono: ${actualPhone}\n` +
                         `${data.more_details ? `• Detalles: ${data.more_details}\n` : ''}` +
                         `\n✨ Te esperamos en nuestra joyería. ¡Gracias por confiar en nosotros!`;
                     
-                    // Enviar mensaje al usuario usando su teléfono
-                    await whatsappService.sendTextMessage(data.phone, confirmationMessage);
-                    console.log('✅ Mensaje de confirmación enviado al WhatsApp:', data.phone);
+                    // Usar siempre el número de WhatsApp original
+                    const targetPhone = actualPhone;
+                    await whatsappService.sendTextMessage(targetPhone, confirmationMessage);
+                    console.log('✅ Mensaje de confirmación enviado al WhatsApp:', targetPhone, flow_token ? '(número original)' : '(número del formulario)');
                     
                 } catch (msgError) {
                     console.error('❌ Error enviando mensaje de confirmación:', msgError);

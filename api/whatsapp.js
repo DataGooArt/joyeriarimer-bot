@@ -111,7 +111,7 @@ async function sendProductListMessage(to, products, bodyText, buttonText) {
  * @param {string} headerText - El texto del encabezado del mensaje.
  * @param {string} bodyText - El texto del cuerpo del mensaje.
  */
-async function sendFlowMessage(to, flowId, cta, screenId, headerText, bodyText, flowData = null) {
+async function sendFlowMessage(to, flowId, cta, screenId, headerText, bodyText, flowData = null, flowToken = null) {
     const flowActionPayload = {
         screen: screenId,
     };
@@ -149,6 +149,12 @@ async function sendFlowMessage(to, flowId, cta, screenId, headerText, bodyText, 
             }
         }
     };
+    
+    // Agregar flow_token si se proporciona
+    if (flowToken) {
+        data.interactive.action.parameters.flow_token = flowToken;
+    }
+    
     await sendMessageAPI(data);
 }
 

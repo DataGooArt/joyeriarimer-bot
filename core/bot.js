@@ -323,7 +323,8 @@ async function sendAppointmentFlow(to, aiResponse) {
                 date: date,
                 is_date_enabled: true,
                 time: time,
-                is_time_enabled: true
+                is_time_enabled: true,
+                default_phone: to // Pasar el número de WhatsApp como valor por defecto
             }
         };
 
@@ -341,7 +342,8 @@ async function sendAppointmentFlow(to, aiResponse) {
             'APPOINTMENT',
             '📅 Agendar tu Cita',
             aiResponse || '¡Perfecto! Te ayudo a agendar tu cita. Completa la información:',
-            flowActionPayload
+            flowActionPayload,
+            to // Pasar el número original como flow_token para recordarlo
         );
 
         console.log('✅ Flow de agendamiento enviado con estructura correcta del Flow');
